@@ -182,97 +182,6 @@ class VideoGenerator:
             # Store processed text for syntax highlighting
             self.processed_text = processed_text
 
-    def render_syntax_highlighted_text(self, text: str, font: pygame.font.Font,
-                                     x: int, y: int, line_number: int = 0) -> int:
-        """
-        Render text with syntax highlighting support.
-
-        Args:
-            text: Text to render
-            font: Pygame font object
-            x: X position
-            y: Y position
-            line_number: Line number for token lookup
-
-        Returns:
-            Width of rendered text
-        """
-        if not hasattr(self, 'processed_text') or not self.processed_text.tokens:
-            # Fallback to plain text rendering
-            text_surface = font.render(text, True, config.hex_to_rgb(self.processed_text.language_info.name if hasattr(self, 'processed_text') else "#00FF00"))
-            self.screen.blit(text_surface, (x, y))
-            return text_surface.get_width()
-
-        # Find tokens for this text
-        current_x = x
-        text_start = sum(len(line) + 1 for line in self.processed_text.lines[:line_number])  # +1 for newlines
-        text_end = text_start + len(text)
-
-        # Find relevant tokens
-        relevant_tokens = []
-        for token in self.processed_text.tokens:
-            if (token.start_pos < text_end and token.end_pos > text_start):
-                # Calculate overlap
-                overlap_start = max(token.start_pos, text_start)
-                overlap_end = min(token.end_pos, text_end)
-
-                if overlap_start < overlap_end:
-                    # Extract the overlapping text
-                    token_text_start = overlap_start - token.start_pos
-                    token_text_end = token_text_start + (overlap_end - overlap_start)
-                    overlapping_text = token.text[token_text_start:token_text_end]
-
-                    # Calculate position within the line
-                    line_offset = overlap_start - text_start
-
-                    relevant_tokens.append({
-                        'text': overlapping_text,
-                        'color': token.color,
-                        'offset': line_offset
-                    })
-
-        # Sort tokens by offset
-        relevant_tokens.sort(key=lambda t: t['offset'])
-
-        # Render tokens with colors
-        last_offset = 0
-        for token_info in relevant_tokens:
-            offset = token_info['offset']
-
-            # Render any plain text before this token
-            if offset > last_offset:
-                plain_text = text[last_offset:offset]
-                if plain_text:
-                    color = config.hex_to_rgb("#00FF00")  # Default green
-                    text_surface = font.render(plain_text, True, color)
-                    self.screen.blit(text_surface, (current_x, y))
-                    current_x += text_surface.get_width()
-
-            # Render the colored token
-            token_text = token_info['text']
-            if token_text:
-                try:
-                    color = config.hex_to_rgb(token_info['color'])
-                except:
-                    color = config.hex_to_rgb("#00FF00")  # Fallback to green
-
-                text_surface = font.render(token_text, True, color)
-                self.screen.blit(text_surface, (current_x, y))
-                current_x += text_surface.get_width()
-
-            last_offset = offset + len(token_info['text'])
-
-        # Render any remaining plain text
-        if last_offset < len(text):
-            remaining_text = text[last_offset:]
-            if remaining_text:
-                color = config.hex_to_rgb("#00FF00")  # Default green
-                text_surface = font.render(remaining_text, True, color)
-                self.screen.blit(text_surface, (current_x, y))
-                current_x += text_surface.get_width()
-
-        return current_x - x
-
             profiler.end_operation("load_text_content",
                                  lines_loaded=len(code_lines),
                                  content_source=content_source)
@@ -567,7 +476,97 @@ class VideoGenerator:
 
             logger.error("Typing effect generation failed", job_id=job_id, error=str(e))
             raise
-    
+
+    def render_syntax_highlighted_text(self, text: str, font: pygame.font.Font,
+                                     x: int, y: int, line_number: int = 0) -> int:
+        """
+        Render text with syntax highlighting support.
+
+        Args:
+            text: Text to render
+            font: Pygame font object
+            x: X position
+            y: Y position
+            line_number: Line number for token lookup
+
+        Returns:
+            Width of rendered text
+        """
+        if not hasattr(self, 'processed_text') or not self.processed_text.tokens:
+            # Fallback to plain text rendering
+            text_surface = font.render(text, True, config.hex_to_rgb("#00FF00"))
+            self.screen.blit(text_surface, (x, y))
+            return text_surface.get_width()
+
+        # Find tokens for this text
+        current_x = x
+        text_start = sum(len(line) + 1 for line in self.processed_text.lines[:line_number])  # +1 for newlines
+        text_end = text_start + len(text)
+
+        # Find relevant tokens
+        relevant_tokens = []
+        for token in self.processed_text.tokens:
+            if (token.start_pos < text_end and token.end_pos > text_start):
+                # Calculate overlap
+                overlap_start = max(token.start_pos, text_start)
+                overlap_end = min(token.end_pos, text_end)
+
+                if overlap_start < overlap_end:
+                    # Extract the overlapping text
+                    token_text_start = overlap_start - token.start_pos
+                    token_text_end = token_text_start + (overlap_end - overlap_start)
+                    overlapping_text = token.text[token_text_start:token_text_end]
+
+                    # Calculate position within the line
+                    line_offset = overlap_start - text_start
+
+                    relevant_tokens.append({
+                        'text': overlapping_text,
+                        'color': token.color,
+                        'offset': line_offset
+                    })
+
+        # Sort tokens by offset
+        relevant_tokens.sort(key=lambda t: t['offset'])
+
+        # Render tokens with colors
+        last_offset = 0
+        for token_info in relevant_tokens:
+            offset = token_info['offset']
+
+            # Render any plain text before this token
+            if offset > last_offset:
+                plain_text = text[last_offset:offset]
+                if plain_text:
+                    color = config.hex_to_rgb("#00FF00")  # Default green
+                    text_surface = font.render(plain_text, True, color)
+                    self.screen.blit(text_surface, (current_x, y))
+                    current_x += text_surface.get_width()
+
+            # Render the colored token
+            token_text = token_info['text']
+            if token_text:
+                try:
+                    color = config.hex_to_rgb(token_info['color'])
+                except:
+                    color = config.hex_to_rgb("#00FF00")  # Fallback to green
+
+                text_surface = font.render(token_text, True, color)
+                self.screen.blit(text_surface, (current_x, y))
+                current_x += text_surface.get_width()
+
+            last_offset = offset + len(token_info['text'])
+
+        # Render any remaining plain text
+        if last_offset < len(text):
+            remaining_text = text[last_offset:]
+            if remaining_text:
+                color = config.hex_to_rgb("#00FF00")  # Default green
+                text_surface = font.render(remaining_text, True, color)
+                self.screen.blit(text_surface, (current_x, y))
+                current_x += text_surface.get_width()
+
+        return current_x - x
 
     def _assemble_video(self, job_id: str, frames_dir: Path, effect_type: str) -> str:
         """
