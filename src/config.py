@@ -38,17 +38,14 @@ class Config:
     TYPING_WPM: int = 150  # Words per minute
     TYPING_CHAR_DELAY_MS: int = 80  # Milliseconds per character
     TYPING_CURSOR_BLINK_HZ: float = 1.0  # Cursor blink frequency
-    TYPING_FONT_SIZE: int = 32
+    TYPING_FONT_SIZE: int = 32  # Default font size
+    TYPING_FONT_SIZE_MIN: int = 12  # Minimum allowed font size
+    TYPING_FONT_SIZE_MAX: int = 72  # Maximum allowed font size
     TYPING_SCROLL_LINE_THRESHOLD: int = 92  # Start scrolling after this many lines
     TYPING_LOOP_PAUSE_SECONDS: int = 2
     TYPING_FADE_FRAMES: int = 30
     
-    # Matrix rain effect settings
-    MATRIX_FONT_SIZES: tuple = (16, 32, 48)  # Far, mid, near
-    MATRIX_COLUMN_SPACING: int = 16
-    MATRIX_TRAIL_OPACITY: int = 25  # 10% opacity for trailing effect
-    MATRIX_LOOP_DURATION_FRAMES: int = 900  # 15 seconds at 60fps
-    MATRIX_RESET_VARIANCE_PX: int = 200
+
     
     # Colors (RGB tuples)
     COLOR_BLACK: tuple = (0, 0, 0)
@@ -77,7 +74,10 @@ class Config:
     
     # Font files
     JETBRAINS_MONO_FONT: Path = FONTS_DIR / "JetBrainsMono-Regular.ttf"
-    MATRIX_KATAKANA_FONT: Path = FONTS_DIR / "matrix-katakana.ttf"
+
+    # File upload settings
+    MAX_UPLOAD_SIZE_MB: int = 10  # Maximum file upload size in MB
+    ALLOWED_TEXT_EXTENSIONS: set = {'.txt'}  # Allowed file extensions for text upload
     
     # ========================================================================
     # API Configuration
@@ -171,14 +171,69 @@ class Config:
         """Get path to a specific font file."""
         font_mapping = {
             "jetbrains": cls.JETBRAINS_MONO_FONT,
-            "matrix": cls.MATRIX_KATAKANA_FONT,
         }
-        
+
         font_path = font_mapping.get(font_name.lower())
         if font_path and font_path.exists():
             return font_path
-        
+
         return None
+
+    @classmethod
+    def get_available_fonts(cls) -> dict:
+        """Get list of available fonts with their display names and paths."""
+        available_fonts = {}
+
+        # Check bundled fonts
+        font_mapping = {
+            "jetbrains": {
+                "name": "JetBrains Mono",
+                "path": cls.JETBRAINS_MONO_FONT,
+                "type": "bundled"
+            }
+        }
+
+        for font_id, font_info in font_mapping.items():
+            if font_info["path"].exists():
+                available_fonts[font_id] = font_info
+
+        # Add common system fonts as fallbacks
+        system_fonts = {
+            "courier": {
+                "name": "Courier New",
+                "path": None,  # System font
+                "type": "system"
+            },
+            "consolas": {
+                "name": "Consolas",
+                "path": None,  # System font
+                "type": "system"
+            },
+            "monaco": {
+                "name": "Monaco",
+                "path": None,  # System font
+                "type": "system"
+            }
+        }
+
+        available_fonts.update(system_fonts)
+        return available_fonts
+
+    @classmethod
+    def validate_hex_color(cls, color_str: str) -> bool:
+        """Validate hex color format (#RRGGBB)."""
+        import re
+        hex_pattern = r'^#[0-9A-Fa-f]{6}$'
+        return bool(re.match(hex_pattern, color_str))
+
+    @classmethod
+    def hex_to_rgb(cls, hex_color: str) -> tuple:
+        """Convert hex color to RGB tuple."""
+        if not cls.validate_hex_color(hex_color):
+            raise ValueError(f"Invalid hex color format: {hex_color}")
+
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
 # Global configuration instance

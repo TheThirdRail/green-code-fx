@@ -83,18 +83,112 @@ class TestTypingEffectEndpoint:
             'source_file': 'snake_code.txt',
             'output_format': 'mp4'
         }
-        
+
         response = client.post('/api/generate/typing',
                              data=json.dumps(payload),
                              content_type='application/json')
-        
+
         assert response.status_code == 202
         data = json.loads(response.data)
-        
+
         assert 'job_id' in data
         assert data['status'] == 'queued'
         assert 'estimated_duration' in data
         assert data['job_id'].startswith('typing_')
+
+    def test_generate_typing_effect_with_customization(self, client, mock_video_generator):
+        """Test typing effect generation with custom parameters."""
+        payload = {
+            'duration': 60,
+            'font_family': 'jetbrains',
+            'font_size': 24,
+            'text_color': '#FF0000',
+            'custom_text': 'print("Hello, World!")\nprint("Custom text test")',
+            'output_format': 'mp4'
+        }
+
+        response = client.post('/api/generate/typing',
+                             data=json.dumps(payload),
+                             content_type='application/json')
+
+        assert response.status_code == 202
+        data = json.loads(response.data)
+
+        assert 'job_id' in data
+        assert data['status'] == 'queued'
+        assert data['job_id'].startswith('typing_')
+
+    def test_generate_typing_effect_invalid_font_size(self, client):
+        """Test typing effect generation with invalid font size."""
+        payload = {
+            'duration': 60,
+            'font_size': 100,  # Too large
+            'output_format': 'mp4'
+        }
+
+        response = client.post('/api/generate/typing',
+                             data=json.dumps(payload),
+                             content_type='application/json')
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert 'error' in data
+        assert 'Font size must be between' in data['error']
+
+    def test_generate_typing_effect_invalid_color(self, client):
+        """Test typing effect generation with invalid color format."""
+        payload = {
+            'duration': 60,
+            'text_color': 'invalid-color',
+            'output_format': 'mp4'
+        }
+
+        response = client.post('/api/generate/typing',
+                             data=json.dumps(payload),
+                             content_type='application/json')
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert 'error' in data
+        assert 'Invalid color format' in data['error']
+
+    def test_generate_typing_effect_invalid_font_family(self, client):
+        """Test typing effect generation with invalid font family."""
+        payload = {
+            'duration': 60,
+            'font_family': 'nonexistent-font',
+            'output_format': 'mp4'
+        }
+
+        response = client.post('/api/generate/typing',
+                             data=json.dumps(payload),
+                             content_type='application/json')
+
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert 'error' in data
+        assert 'Invalid font family' in data['error']
+
+
+class TestFontDiscoveryEndpoint:
+    """Test cases for the font discovery endpoint."""
+
+    def test_list_available_fonts(self, client):
+        """Test listing available fonts."""
+        response = client.get('/api/fonts')
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+
+        assert 'fonts' in data
+        assert 'default' in data
+        assert data['default'] == 'jetbrains'
+        assert isinstance(data['fonts'], dict)
+
+        # Should have at least jetbrains font
+        assert 'jetbrains' in data['fonts']
+        assert 'name' in data['fonts']['jetbrains']
+        assert 'type' in data['fonts']['jetbrains']
     
     def test_generate_typing_effect_invalid_duration(self, client):
         """Test typing effect with invalid duration."""

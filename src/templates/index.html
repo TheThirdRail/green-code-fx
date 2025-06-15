@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Typing Effect Generator - Green-Code FX{% endblock %}
+
+{% block extra_head %}
+<!-- Color picker CSS -->
+<link href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/classic.min.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Main Form Section -->
+    <div class="col-lg-8">
+        <div class="card bg-dark border-success">
+            <div class="card-header bg-success text-dark">
+                <h4 class="mb-0">
+                    <i class="fas fa-keyboard me-2"></i>Typing Effect Generator
+                </h4>
+            </div>
+            <div class="card-body">
+                <form id="videoGenerationForm" enctype="multipart/form-data">
+                    <!-- Text Input Section -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="text-success mb-3">
+                                <i class="fas fa-file-alt me-2"></i>Text Content
+                            </h5>
+                            
+                            <!-- Text Input Method Selection -->
+                            <div class="btn-group w-100 mb-3" role="group">
+                                <input type="radio" class="btn-check" name="textInputMethod" id="methodCustom" value="custom" checked>
+                                <label class="btn btn-outline-success" for="methodCustom">
+                                    <i class="fas fa-edit me-1"></i>Custom Text
+                                </label>
+                                
+                                <input type="radio" class="btn-check" name="textInputMethod" id="methodFile" value="file">
+                                <label class="btn btn-outline-success" for="methodFile">
+                                    <i class="fas fa-upload me-1"></i>Upload File
+                                </label>
+                                
+                                <input type="radio" class="btn-check" name="textInputMethod" id="methodDefault" value="default">
+                                <label class="btn btn-outline-success" for="methodDefault">
+                                    <i class="fas fa-code me-1"></i>Default Code
+                                </label>
+                            </div>
+                            
+                            <!-- Custom Text Area -->
+                            <div id="customTextSection">
+                                <label for="customText" class="form-label">Enter your text:</label>
+                                <textarea 
+                                    class="form-control bg-dark text-light border-secondary" 
+                                    id="customText" 
+                                    name="custom_text" 
+                                    rows="8" 
+                                    placeholder="Type or paste your code here..."
+                                    maxlength="50000"
+                                ></textarea>
+                                <div class="form-text text-muted">
+                                    <span id="charCount">0</span> / 50,000 characters
+                                </div>
+                            </div>
+                            
+                            <!-- File Upload Section -->
+                            <div id="fileUploadSection" style="display: none;">
+                                <label for="textFile" class="form-label">Upload text file (.txt only):</label>
+                                <div class="file-upload-area border border-secondary rounded p-4 text-center">
+                                    <input type="file" class="form-control d-none" id="textFile" name="text_file" accept=".txt">
+                                    <div class="upload-placeholder">
+                                        <i class="fas fa-cloud-upload-alt fa-3x text-success mb-3"></i>
+                                        <p class="mb-2">Drag and drop your .txt file here</p>
+                                        <p class="text-muted">or <button type="button" class="btn btn-outline-success btn-sm" onclick="document.getElementById('textFile').click()">Browse Files</button></p>
+                                        <small class="text-muted">Maximum file size: 10MB</small>
+                                    </div>
+                                    <div class="upload-success d-none">
+                                        <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                                        <p class="mb-0" id="uploadedFileName"></p>
+                                        <button type="button" class="btn btn-outline-danger btn-sm mt-2" onclick="clearFileUpload()">Remove</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Customization Section -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="text-success mb-3">
+                                <i class="fas fa-palette me-2"></i>Customization
+                            </h5>
+                        </div>
+                        
+                        <!-- Font Selection -->
+                        <div class="col-md-6 mb-3">
+                            <label for="fontFamily" class="form-label">Font Family:</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="fontFamily" name="font_family">
+                                <option value="jetbrains" selected>JetBrains Mono (Recommended)</option>
+                                <!-- Additional fonts will be loaded dynamically -->
+                            </select>
+                        </div>
+                        
+                        <!-- Font Size -->
+                        <div class="col-md-6 mb-3">
+                            <label for="fontSize" class="form-label">Font Size: <span id="fontSizeValue">32</span>px</label>
+                            <input type="range" class="form-range" id="fontSize" name="font_size" min="12" max="72" value="32">
+                        </div>
+                        
+                        <!-- Text Color -->
+                        <div class="col-md-6 mb-3">
+                            <label for="textColor" class="form-label">Text Color:</label>
+                            <div class="input-group">
+                                <div id="colorPickerButton" class="color-preview bg-success"></div>
+                                <input type="text" class="form-control bg-dark text-light border-secondary" id="textColor" name="text_color" value="#00FF00" pattern="^#[0-9A-Fa-f]{6}$">
+                            </div>
+                            <div class="form-text text-muted">Enter hex color code (e.g., #00FF00)</div>
+                        </div>
+                        
+                        <!-- Duration -->
+                        <div class="col-md-6 mb-3">
+                            <label for="duration" class="form-label">Duration (seconds):</label>
+                            <input type="number" class="form-control bg-dark text-light border-secondary" id="duration" name="duration" value="90" min="10" max="600">
+                            <div class="form-text text-muted">Between 10 and 600 seconds</div>
+                        </div>
+                    </div>
+
+                    <!-- Generation Controls -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button type="button" class="btn btn-outline-secondary me-md-2" id="previewBtn">
+                                    <i class="fas fa-eye me-1"></i>Preview
+                                </button>
+                                <button type="submit" class="btn btn-success" id="generateBtn">
+                                    <i class="fas fa-play me-1"></i>Generate Video
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview and Status Section -->
+    <div class="col-lg-4">
+        <!-- Preview Panel -->
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-eye me-2"></i>Preview
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="previewArea" class="preview-container bg-black border rounded p-3 text-center">
+                    <div class="preview-placeholder">
+                        <i class="fas fa-desktop fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Click "Preview" to see how your text will look</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Job Status Panel -->
+        <div class="card bg-dark border-secondary">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-tasks me-2"></i>Generation Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="statusArea">
+                    <div class="status-idle">
+                        <i class="fas fa-clock text-muted me-2"></i>
+                        <span class="text-muted">Ready to generate</span>
+                    </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div id="progressContainer" class="mt-3" style="display: none;">
+                    <div class="progress">
+                        <div id="progressBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-1">
+                        <small class="text-muted">
+                            <span id="progressText">Initializing...</span>
+                        </small>
+                        <small class="text-muted">
+                            <span id="timeRemaining"></span>
+                        </small>
+                    </div>
+                </div>
+                
+                <!-- Download Section -->
+                <div id="downloadSection" class="mt-3" style="display: none;">
+                    <div class="d-grid">
+                        <a href="#" class="btn btn-success" id="downloadBtn" download>
+                            <i class="fas fa-download me-1"></i>Download Video
+                        </a>
+                    </div>
+                    <div class="mt-2 text-center">
+                        <small class="text-muted">
+                            File size: <span id="fileSize">-</span> | 
+                            Duration: <span id="videoDuration">-</span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Color picker JS -->
+<script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
+<!-- Custom form handling JS -->
+<script src="{{ url_for('static', filename='js/form-handler.js') }}"></script>
+{% endblock %}

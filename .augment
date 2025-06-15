@@ -47,16 +47,22 @@ These rules govern the **two chroma‑key animation deliverables**: (1) *Typing 
 
 ```
 green-code-fx/
-├─ typing_effect.py
-├─ matrix_rain.py
-├─ snake_code.txt          # source code displayed in typing effect
+├─ src/
+│   ├─ web_api.py          # Flask API server
+│   ├─ video_generator.py  # Core generation logic
+│   ├─ config.py          # Configuration management
+│   ├─ templates/         # HTML templates
+│   └─ static/           # CSS, JS, images
 ├─ assets/
-│   └─ fonts/
-│       ├─ JetBrainsMono-Regular.ttf
-│       └─ matrix-katakana.ttf
-├─ requirements.txt        # generated via pip‑freeze
-├─ README.md
-└─ .pre-commit-config.yaml
+│   ├─ fonts/
+│   │   └─ JetBrainsMono-Regular.ttf
+│   └─ snake_code.txt     # source code displayed in typing effect
+├─ output/               # Generated videos
+├─ temp/                # Temporary frames
+├─ docker-compose.yml   # Service orchestration
+├─ Dockerfile          # Container definition
+├─ requirements.txt    # Python dependencies
+└─ README.md
 ```
 
 ---

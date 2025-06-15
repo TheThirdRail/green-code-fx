@@ -78,3 +78,10 @@ coverage.xml
 *.bak
 *.backup
 *~
+
+# Augment specific
+.augment
+
+# Test files (temporary)
+test_*.py
+!tests/test_*.py

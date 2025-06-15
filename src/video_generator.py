@@ -16,8 +16,13 @@ import time
 import pygame
 import structlog
 
-from .config import config
-from .performance_profiler import profiler
+try:
+    from .config import config
+    from .performance_profiler import profiler
+except ImportError:
+    # Handle direct execution
+    from config import config
+    from performance_profiler import profiler
 
 
 logger = structlog.get_logger()
@@ -63,56 +68,100 @@ class VideoGenerator:
         duration: int,
         source_file: str,
         output_format: str = "mp4",
+        font_family: str = "jetbrains",
+        font_size: int = None,
+        text_color: str = "#00FF00",
+        custom_text: Optional[str] = None,
+        uploaded_file_path: Optional[str] = None,
         progress_callback: Optional[Callable[[int], None]] = None
     ) -> str:
         """
-        Generate typing code effect video.
-        
+        Generate typing code effect video with customization options.
+
         Args:
             job_id: Unique job identifier
             duration: Video duration in seconds
-            source_file: Source code file to display
+            source_file: Source code file to display (ignored if custom_text or uploaded_file_path provided)
             output_format: Output format ('mp4' or 'png')
+            font_family: Font family to use ('jetbrains', 'courier', etc.)
+            font_size: Font size in pixels (defaults to config value)
+            text_color: Text color in hex format (#RRGGBB)
+            custom_text: Custom text to display instead of source file
+            uploaded_file_path: Path to uploaded text file
             progress_callback: Optional progress callback function
-            
+
         Returns:
             Path to generated video file
         """
+        # Use default font size if not provided
+        if font_size is None:
+            font_size = config.TYPING_FONT_SIZE
+
+        # Convert hex color to RGB
+        text_color_rgb = config.hex_to_rgb(text_color)
+
         logger.info("Starting typing effect generation",
-                   job_id=job_id, duration=duration, source_file=source_file)
+                   job_id=job_id, duration=duration, source_file=source_file,
+                   font_family=font_family, font_size=font_size, text_color=text_color)
 
         # Start overall profiling
         profiler.start_operation("typing_effect_total",
                                 job_id=job_id,
                                 duration=duration,
-                                source_file=source_file)
+                                source_file=source_file,
+                                font_family=font_family,
+                                font_size=font_size)
 
         if progress_callback:
             progress_callback(5)
 
         try:
-            # Load source code
-            profiler.start_operation("load_source_file", source_file=source_file)
-            source_path = config.ASSETS_DIR / source_file
-            if not source_path.exists():
-                raise FileNotFoundError(f"Source file not found: {source_path}")
+            # Load text content (priority: uploaded file > custom text > source file)
+            profiler.start_operation("load_text_content")
 
-            with open(source_path, 'r', encoding='utf-8') as f:
-                code_lines = [line.rstrip() for line in f.readlines()]
+            if uploaded_file_path:
+                # Load from uploaded file
+                with open(uploaded_file_path, 'r', encoding='utf-8') as f:
+                    code_lines = [line.rstrip() for line in f.readlines()]
+                content_source = f"uploaded file: {Path(uploaded_file_path).name}"
+            elif custom_text:
+                # Use custom text
+                code_lines = [line.rstrip() for line in custom_text.splitlines()]
+                content_source = "custom text input"
+            else:
+                # Load from source file
+                source_path = config.ASSETS_DIR / source_file
+                if not source_path.exists():
+                    raise FileNotFoundError(f"Source file not found: {source_path}")
 
-            profiler.end_operation("load_source_file", line_count=len(code_lines))
+                with open(source_path, 'r', encoding='utf-8') as f:
+                    code_lines = [line.rstrip() for line in f.readlines()]
+                content_source = f"source file: {source_file}"
+
+            profiler.end_operation("load_text_content",
+                                 lines_loaded=len(code_lines),
+                                 content_source=content_source)
             
             if progress_callback:
                 progress_callback(10)
 
             # Load font
-            profiler.start_operation("load_font", font_size=config.TYPING_FONT_SIZE)
-            font_path = config.get_font_path("jetbrains")
+            profiler.start_operation("load_font", font_family=font_family, font_size=font_size)
+            font_path = config.get_font_path(font_family)
             if font_path and font_path.exists():
-                font = pygame.font.Font(str(font_path), config.TYPING_FONT_SIZE)
+                font = pygame.font.Font(str(font_path), font_size)
+                font_loaded = True
             else:
-                font = pygame.font.SysFont("Courier New", config.TYPING_FONT_SIZE)
-            profiler.end_operation("load_font", font_loaded=font_path is not None)
+                # Fallback to system fonts
+                available_fonts = config.get_available_fonts()
+                if font_family in available_fonts and available_fonts[font_family]["type"] == "system":
+                    font_name = available_fonts[font_family]["name"]
+                    font = pygame.font.SysFont(font_name, font_size)
+                else:
+                    # Ultimate fallback
+                    font = pygame.font.SysFont("Courier New", font_size)
+                font_loaded = False
+            profiler.end_operation("load_font", font_loaded=font_loaded, font_family=font_family)
             
             # Calculate total frames needed
             total_frames = duration * config.TARGET_FPS
@@ -200,7 +249,7 @@ class VideoGenerator:
                     if visible_line_count >= max_visible_lines:
                         break
 
-                    text_surface = font.render(line, True, config.COLOR_GREEN)
+                    text_surface = font.render(line, True, text_color_rgb)
                     self.screen.blit(text_surface, (10, y_offset))
                     y_offset += line_height
                     visible_line_count += 1
@@ -212,7 +261,7 @@ class VideoGenerator:
 
                     partial_line = code_lines[current_line][:current_char]
                     if partial_line:
-                        text_surface = font.render(partial_line, True, config.COLOR_GREEN)
+                        text_surface = font.render(partial_line, True, text_color_rgb)
                         self.screen.blit(text_surface, (10, y_offset))
 
                     # Draw blinking cursor
@@ -223,8 +272,8 @@ class VideoGenerator:
 
                     if cursor_visible:
                         cursor_x = 10 + font.size(partial_line)[0] if partial_line else 10
-                        cursor_rect = pygame.Rect(cursor_x, y_offset, 2, config.TYPING_FONT_SIZE)
-                        pygame.draw.rect(self.screen, config.COLOR_GREEN, cursor_rect)
+                        cursor_rect = pygame.Rect(cursor_x, y_offset, 2, font_size)
+                        pygame.draw.rect(self.screen, text_color_rgb, cursor_rect)
 
                 # Handle loop state transitions
                 if loop_state == "paused":
@@ -266,12 +315,11 @@ class VideoGenerator:
                 # Update display
                 pygame.display.flip()
                 
-                # Save frame if generating PNG sequence
-                if output_format == "png":
-                    profiler.start_operation("save_frame", frame_number=frame_count)
-                    frame_path = frames_dir / f"frame_{frame_count:06d}.png"
-                    pygame.image.save(self.screen, str(frame_path))
-                    profiler.end_operation("save_frame")
+                # Save frame for both PNG sequence and MP4 generation
+                profiler.start_operation("save_frame", frame_number=frame_count)
+                frame_path = frames_dir / f"frame_{frame_count:06d}.png"
+                pygame.image.save(self.screen, str(frame_path))
+                profiler.end_operation("save_frame")
                 
                 # Update progress
                 if progress_callback and frame_count % 60 == 0:  # Update every second
@@ -318,201 +366,7 @@ class VideoGenerator:
             logger.error("Typing effect generation failed", job_id=job_id, error=str(e))
             raise
     
-    def generate_matrix_rain(
-        self,
-        job_id: str,
-        duration: int,
-        loop_seamless: bool = True,
-        output_format: str = "mp4",
-        progress_callback: Optional[Callable[[int], None]] = None
-    ) -> str:
-        """
-        Generate Matrix rain effect video.
 
-        Args:
-            job_id: Unique job identifier
-            duration: Video duration in seconds
-            loop_seamless: Whether to create seamless loop
-            output_format: Output format ('mp4' or 'png')
-            progress_callback: Optional progress callback function
-
-        Returns:
-            Path to generated video file
-        """
-        logger.info("Starting Matrix rain generation",
-                   job_id=job_id, duration=duration, loop_seamless=loop_seamless)
-
-        # Start overall profiling
-        profiler.start_operation("matrix_effect_total",
-                                job_id=job_id,
-                                duration=duration,
-                                loop_seamless=loop_seamless)
-
-        if progress_callback:
-            progress_callback(5)
-        
-        try:
-            # Character set for Matrix effect
-            symbols = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*"
-            
-            # Load fonts for different depths with profiling
-            profiler.start_operation("load_fonts", font_count=len(config.MATRIX_FONT_SIZES))
-            fonts = []
-            for size in config.MATRIX_FONT_SIZES:
-                font_path = config.get_font_path("matrix")
-                if font_path and font_path.exists():
-                    font = pygame.font.Font(str(font_path), size)
-                else:
-                    font = pygame.font.SysFont("Courier New", size)
-                fonts.append(font)
-            profiler.end_operation("load_fonts")
-
-            # Pre-render text cache for performance optimization
-            profiler.start_operation("prerender_text_cache", symbol_count=len(symbols), font_count=len(fonts))
-            text_cache = {}
-            for font in fonts:
-                for symbol in symbols:
-                    cache_key = (symbol, id(font))
-                    text_cache[cache_key] = font.render(symbol, True, config.COLOR_BRIGHT_GREEN)
-            profiler.end_operation("prerender_text_cache")
-
-            if progress_callback:
-                progress_callback(10)
-            
-            # Calculate columns and initialize drops
-            base_font_size = config.MATRIX_FONT_SIZES[0]  # Smallest font
-            num_columns = config.VIDEO_WIDTH // config.MATRIX_COLUMN_SPACING
-            
-            # Initialize column data with character tracking
-            columns = []
-            for i in range(num_columns):
-                font_choice = random.choice(fonts)
-                x = i * config.MATRIX_COLUMN_SPACING
-                y_start = random.randint(-50, 0)
-                speed = 1  # Characters per frame
-
-                columns.append({
-                    "x": x,
-                    "y": y_start,
-                    "font": font_choice,
-                    "speed": speed,
-                    "font_index": fonts.index(font_choice),
-                    "characters": []  # List of {char, y_pos, age_frames}
-                })
-            
-            # Note: Color gradient is now handled per-character instead of global fade
-            
-            # Calculate total frames
-            total_frames = duration * config.TARGET_FPS
-            frame_count = 0
-            
-            # Create output directory for frames
-            frames_dir = config.TEMP_DIR / f"{job_id}_frames"
-            frames_dir.mkdir(exist_ok=True)
-            
-            if progress_callback:
-                progress_callback(15)
-            
-            # Main generation loop with profiling
-            profiler.start_operation("main_rendering_loop", total_frames=total_frames)
-            while frame_count < total_frames:
-                # Clear screen
-                self.screen.fill(config.COLOR_BLACK)
-
-                # Process each column with optimized rendering
-                profiler.start_operation("column_processing", frame=frame_count)
-                for col in columns:
-                    font = col["font"]
-                    line_height = font.get_linesize()
-
-                    # Add new character at the head of the column
-                    if random.random() < 0.8:  # 80% chance to add new character each frame
-                        new_char = random.choice(symbols)
-                        col["characters"].append({
-                            "char": new_char,
-                            "y_pos": col["y"]
-                        })
-
-                    # Update and draw all characters in this column using cached text
-                    characters_to_remove = []
-                    for i, char_data in enumerate(col["characters"]):
-                        # Calculate screen position
-                        screen_y = char_data["y_pos"] * line_height
-
-                        # Draw character if visible using cached text surface
-                        if 0 <= screen_y < config.VIDEO_HEIGHT:
-                            cache_key = (char_data["char"], id(font))
-                            text_surface = text_cache.get(cache_key)
-                            if text_surface:
-                                self.screen.blit(text_surface, (col["x"], screen_y))
-
-                        # Move character down
-                        char_data["y_pos"] += col["speed"]
-
-                        # Mark for removal if off screen
-                        if screen_y > config.VIDEO_HEIGHT + config.MATRIX_RESET_VARIANCE_PX:
-                            characters_to_remove.append(i)
-
-                    # Remove off-screen characters (in reverse order to maintain indices)
-                    for i in reversed(characters_to_remove):
-                        del col["characters"][i]
-
-                    # Move column head position
-                    col["y"] += col["speed"]
-
-                    # Reset column if it goes too far off screen
-                    if col["y"] * line_height > config.VIDEO_HEIGHT + config.MATRIX_RESET_VARIANCE_PX:
-                        col["y"] = random.randint(-20, 0)
-                        col["characters"] = []  # Clear all characters when resetting
-                profiler.end_operation("column_processing")
-
-                # Update display
-                pygame.display.flip()
-
-                # Save frame if generating PNG sequence
-                if output_format == "png":
-                    profiler.start_operation("save_frame", frame_number=frame_count)
-                    frame_path = frames_dir / f"frame_{frame_count:06d}.png"
-                    pygame.image.save(self.screen, str(frame_path))
-                    profiler.end_operation("save_frame")
-
-                # Update progress
-                if progress_callback and frame_count % 60 == 0:  # Update every second
-                    progress = 15 + int((frame_count / total_frames) * 70)
-                    progress_callback(min(progress, 85))
-
-                frame_count += 1
-                self.clock.tick(config.TARGET_FPS)
-            profiler.end_operation("main_rendering_loop")
-            
-            if progress_callback:
-                progress_callback(90)
-
-            # Generate output file with profiling
-            profiler.start_operation("video_assembly", output_format=output_format)
-            if output_format == "mp4":
-                output_file = self._assemble_video(job_id, frames_dir, "matrix")
-            else:
-                output_file = self._create_png_archive(job_id, frames_dir, "matrix")
-            profiler.end_operation("video_assembly")
-
-            if progress_callback:
-                progress_callback(100)
-
-            # End overall profiling
-            profiler.end_operation("matrix_effect_total")
-
-            logger.info("Matrix rain generation completed",
-                       job_id=job_id, output_file=output_file, frames=frame_count)
-
-            return output_file
-
-        except Exception as e:
-            logger.error("Matrix rain generation failed", job_id=job_id, error=str(e))
-            # End profiling on error
-            profiler.end_operation("matrix_effect_total", success=False, error=str(e))
-            raise
-    
     def _assemble_video(self, job_id: str, frames_dir: Path, effect_type: str) -> str:
         """
         Assemble PNG frames into MP4 video using FFmpeg with optimized settings.

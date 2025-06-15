@@ -295,7 +295,7 @@ ls -la /app/assets/fonts/
 
 ```bash
 # Generate performance test
-docker exec green-code-fx-generator python scripts/simple_matrix_performance_test.py
+docker exec green-code-fx-generator python scripts/simple_typing_performance_test.py
 
 # Check metrics
 curl http://localhost:8082/metrics | grep -E "(duration|ratio|fps)"

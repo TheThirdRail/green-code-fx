@@ -8,7 +8,7 @@
 
 ## 1. Executive Summary
 
-Green-Code FX is a containerized video effects generation system designed to produce high-quality 4K chroma-key animations for video production workflows. The system generates two specific effects: realistic code typing animations and Matrix-style digital rain, both optimized for easy compositing in post-production.
+Green-Code FX is a containerized video effects generation system designed to produce high-quality 4K chroma-key animations for video production workflows. The system generates realistic code typing animations optimized for easy compositing in post-production.
 
 ### 1.1 Business Objectives
 
@@ -55,17 +55,7 @@ Green-Code FX is a containerized video effects generation system designed to pro
 
 **Success Criteria:** Video generated within 2x realtime, perfect green-on-black output
 
-#### UC-002: Generate Matrix Rain Effect
-**Actor:** Motion Graphics Artist  
-**Goal:** Create seamless looping Matrix rain for background element  
-**Preconditions:** Container is running  
-**Flow:**
-1. User submits Matrix effect request with loop parameters
-2. System generates seamless 15-second loop
-3. User downloads and verifies loop continuity
-4. User integrates into larger composition
 
-**Success Criteria:** Perfect seamless loop, multi-depth parallax effect
 
 #### UC-003: Monitor Generation Progress
 **Actor:** Content Creator  
@@ -93,16 +83,7 @@ Green-Code FX is a containerized video effects generation system designed to pro
 - Automatic scrolling after 92 lines
 - Looping with 2s pause and 30-frame fade transition
 
-**REQ-002: Matrix Rain Effect Generation**
-- Generate 4K Matrix rain animations at 60 FPS
-- Three font depths: 16px (far), 32px (mid), 48px (near)
-- Random character selection from defined symbol set
-- 10% opacity trailing effect for fade
-- Color gradient: #BFFF00 → #008000 over 8 frames
-- Seamless 15-second loop capability
-- Random column reset with 0-200px variance
-
-**REQ-003: Output Format Support**
+**REQ-002: Output Format Support**
 - H.264 MP4 with lossless encoding (CQP ≤ 20)
 - PNG sequence export option
 - Automatic FFmpeg assembly for MP4 output
@@ -110,14 +91,13 @@ Green-Code FX is a containerized video effects generation system designed to pro
 
 ### 3.2 Web API Interface (Priority: Critical)
 
-**REQ-004: RESTful API Endpoints**
+**REQ-003: RESTful API Endpoints**
 - POST /api/generate/typing - Submit typing effect job
-- POST /api/generate/matrix - Submit Matrix effect job
 - GET /api/jobs/{id} - Check job status and progress
 - GET /api/download/{filename} - Download generated files
 - GET /api/health - System health and metrics
 
-**REQ-005: Job Management**
+**REQ-004: Job Management**
 - Unique job ID generation with timestamp
 - Asynchronous job processing with threading
 - Progress tracking (0-100%) with callbacks
@@ -159,7 +139,6 @@ Green-Code FX is a containerized video effects generation system designed to pro
 
 **REQ-010: Generation Speed**
 - Typing effect: ≤ 2x realtime generation
-- Matrix effect: ≤ 1.5x realtime generation
 - API response time: < 500ms for job submission
 - Container startup: < 30 seconds to healthy state
 
@@ -241,7 +220,7 @@ Green-Code FX is a containerized video effects generation system designed to pro
 
 ### Epic 1: Video Generation
 - **US-001**: As a video editor, I want to generate typing code animations so that I can create engaging programming tutorials
-- **US-002**: As a motion graphics artist, I want seamless Matrix rain loops so that I can create sci-fi backgrounds
+
 - **US-003**: As a content creator, I want high-quality 4K output so that my videos look professional
 
 ### Epic 2: System Management
