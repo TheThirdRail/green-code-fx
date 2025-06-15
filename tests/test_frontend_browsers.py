@@ -136,31 +136,74 @@ class TestFrontendUI:
         # Custom section should be hidden
         assert not custom_section.is_displayed()
 
-    def test_font_size_slider(self, browser_driver, app_url):
-        """Test font size slider functionality."""
+    def test_font_size_dropdown(self, browser_driver, app_url):
+        """Test font size dropdown functionality."""
         browser_driver.get(app_url)
-        
-        # Wait for slider to load
+
+        # Wait for dropdown to load
         WebDriverWait(browser_driver, 10).until(
             EC.presence_of_element_located((By.ID, "fontSize"))
         )
-        
-        font_slider = browser_driver.find_element(By.ID, "fontSize")
-        font_value_display = browser_driver.find_element(By.ID, "fontSizeValue")
-        
-        # Get initial value
-        initial_value = font_value_display.text
-        
-        # Move slider using JavaScript (more reliable than ActionChains)
-        browser_driver.execute_script("arguments[0].value = 48; arguments[0].dispatchEvent(new Event('input'));", font_slider)
-        
+
+        font_dropdown = browser_driver.find_element(By.ID, "fontSize")
+
+        # Get initial value (should be 32pt)
+        initial_value = font_dropdown.get_attribute("value")
+        assert initial_value == "32"
+
+        # Select a different font size
+        from selenium.webdriver.support.ui import Select
+        select = Select(font_dropdown)
+        select.select_by_value("48")
+
         # Wait for value to update
         time.sleep(0.5)
-        
-        # Check that value display updated
-        updated_value = font_value_display.text
+
+        # Check that value updated
+        updated_value = font_dropdown.get_attribute("value")
         assert updated_value == "48"
         assert updated_value != initial_value
+
+        # Test extreme values
+        select.select_by_value("8")  # Minimum
+        assert font_dropdown.get_attribute("value") == "8"
+
+        select.select_by_value("150")  # Maximum
+        assert font_dropdown.get_attribute("value") == "150"
+
+    def test_typing_speed_input(self, browser_driver, app_url):
+        """Test typing speed input functionality."""
+        browser_driver.get(app_url)
+
+        # Wait for typing speed input to load
+        WebDriverWait(browser_driver, 10).until(
+            EC.presence_of_element_located((By.ID, "typingSpeed"))
+        )
+
+        typing_speed_input = browser_driver.find_element(By.ID, "typingSpeed")
+
+        # Check initial value (should be 150)
+        initial_value = typing_speed_input.get_attribute("value")
+        assert initial_value == "150"
+
+        # Test valid input
+        typing_speed_input.clear()
+        typing_speed_input.send_keys("100")
+
+        # Trigger input event
+        browser_driver.execute_script("arguments[0].dispatchEvent(new Event('input'));", typing_speed_input)
+
+        # Verify value was set
+        assert typing_speed_input.get_attribute("value") == "100"
+
+        # Test boundary values
+        typing_speed_input.clear()
+        typing_speed_input.send_keys("50")  # Minimum
+        assert typing_speed_input.get_attribute("value") == "50"
+
+        typing_speed_input.clear()
+        typing_speed_input.send_keys("300")  # Maximum
+        assert typing_speed_input.get_attribute("value") == "300"
 
     def test_color_picker_input(self, browser_driver, app_url):
         """Test color picker input functionality."""

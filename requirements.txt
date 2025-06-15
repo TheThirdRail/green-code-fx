@@ -8,6 +8,9 @@ pygame>=2.5.0,<3.0.0
 Flask>=2.3.0,<3.0.0
 Flask-CORS>=4.0.0,<5.0.0
 
+# WebSocket support for real-time features
+websockets>=11.0.0,<12.0.0
+
 # HTTP client for health checks
 requests>=2.31.0,<3.0.0
 
@@ -45,3 +48,6 @@ psutil>=5.9.0,<6.0.0
 
 # UUID generation for job tracking
 uuid>=1.30
+
+# Syntax highlighting and language detection
+Pygments>=2.16.0,<3.0.0

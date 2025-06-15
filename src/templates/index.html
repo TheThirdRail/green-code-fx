@@ -62,19 +62,26 @@
                             
                             <!-- File Upload Section -->
                             <div id="fileUploadSection" style="display: none;">
-                                <label for="textFile" class="form-label">Upload text file (.txt only):</label>
+                                <label for="textFile" class="form-label">Upload code or text file:</label>
                                 <div class="file-upload-area border border-secondary rounded p-4 text-center">
-                                    <input type="file" class="form-control d-none" id="textFile" name="text_file" accept=".txt">
+                                    <input type="file" class="form-control d-none" id="textFile" name="text_file"
+                                           accept=".txt,.py,.js,.ts,.java,.cpp,.c,.h,.hpp,.cs,.php,.rb,.go,.rs,.swift,.kt,.scala,.html,.htm,.css,.scss,.sass,.less,.json,.xml,.yaml,.yml,.toml,.ini,.cfg,.conf,.md,.markdown,.rst,.sql,.sh,.bash,.zsh,.fish,.ps1,.bat,.cmd">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-cloud-upload-alt fa-3x text-success mb-3"></i>
-                                        <p class="mb-2">Drag and drop your .txt file here</p>
+                                        <p class="mb-2">Drag and drop your code or text file here</p>
                                         <p class="text-muted">or <button type="button" class="btn btn-outline-success btn-sm" onclick="document.getElementById('textFile').click()">Browse Files</button></p>
-                                        <small class="text-muted">Maximum file size: 10MB</small>
+                                        <small class="text-muted">Supports: Python, JavaScript, Java, C++, HTML, CSS, JSON, Markdown, and more<br>Maximum file size: 10MB</small>
                                     </div>
                                     <div class="upload-success d-none">
                                         <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
                                         <p class="mb-0" id="uploadedFileName"></p>
-                                        <button type="button" class="btn btn-outline-danger btn-sm mt-2" onclick="clearFileUpload()">Remove</button>
+                                        <div id="languageDetection" class="mt-2">
+                                            <small class="text-muted">
+                                                <i class="fas fa-search fa-spin me-1"></i>
+                                                Detecting language...
+                                            </small>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-danger btn-sm mt-2" onclick="FormManager.clearFileUpload()">Remove</button>
                                     </div>
                                 </div>
                             </div>
@@ -100,8 +107,44 @@
                         
                         <!-- Font Size -->
                         <div class="col-md-6 mb-3">
-                            <label for="fontSize" class="form-label">Font Size: <span id="fontSizeValue">32</span>px</label>
-                            <input type="range" class="form-range" id="fontSize" name="font_size" min="12" max="72" value="32">
+                            <label for="fontSize" class="form-label">Font Size:</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="fontSize" name="font_size">
+                                <option value="8">8pt</option>
+                                <option value="10">10pt</option>
+                                <option value="12">12pt</option>
+                                <option value="14">14pt</option>
+                                <option value="16">16pt</option>
+                                <option value="18">18pt</option>
+                                <option value="20">20pt</option>
+                                <option value="22">22pt</option>
+                                <option value="24">24pt</option>
+                                <option value="26">26pt</option>
+                                <option value="28">28pt</option>
+                                <option value="30">30pt</option>
+                                <option value="32" selected>32pt</option>
+                                <option value="36">36pt</option>
+                                <option value="40">40pt</option>
+                                <option value="44">44pt</option>
+                                <option value="48">48pt</option>
+                                <option value="52">52pt</option>
+                                <option value="56">56pt</option>
+                                <option value="60">60pt</option>
+                                <option value="64">64pt</option>
+                                <option value="68">68pt</option>
+                                <option value="72">72pt</option>
+                                <option value="76">76pt</option>
+                                <option value="80">80pt</option>
+                                <option value="84">84pt</option>
+                                <option value="88">88pt</option>
+                                <option value="92">92pt</option>
+                                <option value="96">96pt</option>
+                                <option value="100">100pt</option>
+                                <option value="110">110pt</option>
+                                <option value="120">120pt</option>
+                                <option value="130">130pt</option>
+                                <option value="140">140pt</option>
+                                <option value="150">150pt</option>
+                            </select>
                         </div>
                         
                         <!-- Text Color -->
@@ -114,11 +157,47 @@
                             <div class="form-text text-muted">Enter hex color code (e.g., #00FF00)</div>
                         </div>
                         
+                        <!-- Typing Speed (WPM) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="typingSpeed" class="form-label">Typing Speed (WPM):</label>
+                            <input type="number" class="form-control bg-dark text-light border-secondary" id="typingSpeed" name="typing_speed" value="150" min="50" max="300">
+                            <div class="form-text text-muted">Between 50 and 300 words per minute</div>
+                        </div>
+
                         <!-- Duration -->
                         <div class="col-md-6 mb-3">
                             <label for="duration" class="form-label">Duration (seconds):</label>
                             <input type="number" class="form-control bg-dark text-light border-secondary" id="duration" name="duration" value="90" min="10" max="600">
                             <div class="form-text text-muted">Between 10 and 600 seconds</div>
+                        </div>
+                    </div>
+
+                    <!-- Output Format Section -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="text-success mb-3">
+                                <i class="fas fa-file-export me-2"></i>Output Format
+                            </h5>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="outputFormat" class="form-label">Format:</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="outputFormat" name="output_format">
+                                <option value="mp4" selected>MP4 Video (Recommended)</option>
+                                <option value="gif">GIF Animation</option>
+                                <option value="png">PNG Sequence (ZIP)</option>
+                            </select>
+                            <div class="form-text text-muted">Choose output format</div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <div class="format-info">
+                                <small class="text-muted">
+                                    <div id="formatDescription">
+                                        <strong>MP4:</strong> Best quality, smaller file size, compatible with all video players
+                                    </div>
+                                </small>
+                            </div>
                         </div>
                     </div>
 
@@ -198,9 +277,34 @@
                     </div>
                     <div class="mt-2 text-center">
                         <small class="text-muted">
-                            File size: <span id="fileSize">-</span> | 
+                            File size: <span id="fileSize">-</span> |
                             Duration: <span id="videoDuration">-</span>
                         </small>
+                    </div>
+                </div>
+
+                <!-- Keyboard Shortcuts Help -->
+                <div class="mt-3">
+                    <button class="btn btn-outline-success btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#keyboardShortcuts">
+                        <i class="fas fa-keyboard me-1"></i>Keyboard Shortcuts
+                    </button>
+                    <div class="collapse mt-2" id="keyboardShortcuts">
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body py-2">
+                                <small class="text-muted">
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <strong>Ctrl+Enter:</strong> Generate Video<br>
+                                            <strong>Ctrl+P:</strong> Focus Preview<br>
+                                        </div>
+                                        <div class="col-6">
+                                            <strong>Ctrl+T:</strong> Toggle Theme<br>
+                                            <strong>Escape:</strong> Cancel/Close<br>
+                                        </div>
+                                    </div>
+                                </small>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -214,4 +318,90 @@
 <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
 <!-- Custom form handling JS -->
 <script src="{{ url_for('static', filename='js/form-handler.js') }}"></script>
+
+<script>
+// Handle shared configuration if present
+{% if shared_config %}
+document.addEventListener('DOMContentLoaded', function() {
+    const sharedConfig = {{ shared_config | tojsonfilter | safe }};
+    if (sharedConfig) {
+        // Apply shared configuration to form
+        applySharedConfiguration(sharedConfig);
+
+        // Show notification about shared configuration
+        setTimeout(() => {
+            if (typeof Utils !== 'undefined') {
+                Utils.showToast('Shared configuration loaded successfully!', 'success');
+            }
+        }, 1000);
+    }
+});
+
+function applySharedConfiguration(config) {
+    // Apply configuration to form elements
+    Object.keys(config).forEach(key => {
+        const element = document.getElementById(key);
+        if (element) {
+            if (element.type === 'checkbox') {
+                element.checked = config[key];
+            } else if (element.type === 'radio') {
+                if (element.value === config[key]) {
+                    element.checked = true;
+                }
+            } else {
+                element.value = config[key];
+            }
+
+            // Trigger change event to update UI
+            const event = new Event('change', { bubbles: true });
+            element.dispatchEvent(event);
+        }
+    });
+
+    // Handle special cases
+    if (config.custom_text) {
+        const customTextArea = document.getElementById('customText');
+        if (customTextArea) {
+            customTextArea.value = config.custom_text;
+        }
+    }
+
+    // Update text input method if specified
+    if (config.text_input_method) {
+        const radioButton = document.querySelector(`input[name="textInputMethod"][value="${config.text_input_method}"]`);
+        if (radioButton) {
+            radioButton.checked = true;
+            radioButton.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    // Show shared configuration banner
+    showSharedConfigBanner(config);
+}
+
+function showSharedConfigBanner(config) {
+    const banner = document.createElement('div');
+    banner.className = 'alert alert-info alert-dismissible fade show mt-3';
+    banner.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas fa-share-alt me-3 fa-lg"></i>
+            <div>
+                <strong>Shared Configuration Loaded</strong><br>
+                <small class="text-muted">
+                    ${config.title || 'Untitled configuration'} -
+                    Created: ${config.timestamp ? new Date(config.timestamp).toLocaleDateString() : 'Unknown date'}
+                </small>
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    // Insert banner at the top of the main content
+    const mainCard = document.querySelector('.card');
+    if (mainCard && mainCard.parentNode) {
+        mainCard.parentNode.insertBefore(banner, mainCard);
+    }
+}
+{% endif %}
+</script>
 {% endblock %}

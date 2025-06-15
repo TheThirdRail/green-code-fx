@@ -38,9 +38,9 @@ class Config:
     TYPING_WPM: int = 150  # Words per minute
     TYPING_CHAR_DELAY_MS: int = 80  # Milliseconds per character
     TYPING_CURSOR_BLINK_HZ: float = 1.0  # Cursor blink frequency
-    TYPING_FONT_SIZE: int = 32  # Default font size
-    TYPING_FONT_SIZE_MIN: int = 12  # Minimum allowed font size
-    TYPING_FONT_SIZE_MAX: int = 72  # Maximum allowed font size
+    TYPING_FONT_SIZE: int = 32  # Default font size in points
+    TYPING_FONT_SIZE_MIN: int = 8   # Minimum allowed font size in points
+    TYPING_FONT_SIZE_MAX: int = 150 # Maximum allowed font size in points
     TYPING_SCROLL_LINE_THRESHOLD: int = 92  # Start scrolling after this many lines
     TYPING_LOOP_PAUSE_SECONDS: int = 2
     TYPING_FADE_FRAMES: int = 30

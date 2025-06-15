@@ -21,13 +21,10 @@ const FormManager = {
     },
 
     requestNotificationPermission() {
-        // Request notification permission for completion alerts
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                    console.log('Notification permission granted');
-                }
-            });
+        // Notification permission is now handled by NotificationManager
+        // This method is kept for backward compatibility but delegates to the new manager
+        if (GreenCodeFX.NotificationManager) {
+            GreenCodeFX.NotificationManager.requestPermission();
         }
     },
 
@@ -38,10 +35,17 @@ const FormManager = {
             radio.addEventListener('change', this.handleTextInputMethodChange.bind(this));
         });
 
-        // Font size slider
-        const fontSizeSlider = document.getElementById('fontSize');
-        if (fontSizeSlider) {
-            fontSizeSlider.addEventListener('input', this.updateFontSizeDisplay.bind(this));
+        // Font size dropdown
+        const fontSizeDropdown = document.getElementById('fontSize');
+        if (fontSizeDropdown) {
+            fontSizeDropdown.addEventListener('change', this.handleFontSizeChange.bind(this));
+        }
+
+        // Typing speed input
+        const typingSpeedInput = document.getElementById('typingSpeed');
+        if (typingSpeedInput) {
+            typingSpeedInput.addEventListener('input', this.validateTypingSpeedField.bind(this));
+            typingSpeedInput.addEventListener('blur', this.validateTypingSpeedField.bind(this));
         }
 
         // Character counter for custom text
@@ -64,17 +68,66 @@ const FormManager = {
         if (previewBtn) {
             previewBtn.addEventListener('click', this.handlePreview.bind(this));
         }
+
+        // Output format selection
+        const outputFormat = document.getElementById('outputFormat');
+        if (outputFormat) {
+            outputFormat.addEventListener('change', this.handleOutputFormatChange.bind(this));
+        }
     },
 
     initializeFormState() {
+        // Load cached settings first
+        if (GreenCodeFX.CacheManager) {
+            GreenCodeFX.CacheManager.loadUserSettings();
+        }
+
         // Set initial character count
         this.updateCharacterCount();
-        
+
         // Set initial font size display
         this.updateFontSizeDisplay();
-        
+
         // Set initial text input method
         this.handleTextInputMethodChange();
+
+        // Set initial output format description
+        this.handleOutputFormatChange();
+
+        // Setup auto-save for settings
+        this.setupSettingsAutoSave();
+    },
+
+    setupSettingsAutoSave() {
+        // Auto-save settings when form values change
+        const formElements = ['fontFamily', 'fontSize', 'textColor', 'typingSpeed', 'duration', 'outputFormat'];
+
+        formElements.forEach(elementId => {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.addEventListener('change', () => {
+                    this.saveCurrentSettings();
+                });
+            }
+        });
+    },
+
+    saveCurrentSettings() {
+        if (!GreenCodeFX.CacheManager) return;
+
+        const settings = {
+            fontFamily: document.getElementById('fontFamily')?.value,
+            fontSize: document.getElementById('fontSize')?.value,
+            textColor: document.getElementById('textColor')?.value,
+            typingSpeed: document.getElementById('typingSpeed')?.value,
+            duration: document.getElementById('duration')?.value,
+            outputFormat: document.getElementById('outputFormat')?.value
+        };
+
+        // Only save if we have valid settings
+        if (Object.values(settings).some(value => value)) {
+            GreenCodeFX.CacheManager.saveUserSettings(settings);
+        }
     },
 
     handleTextInputMethodChange() {
@@ -118,12 +171,17 @@ const FormManager = {
         }
     },
 
-    updateFontSizeDisplay() {
-        const slider = document.getElementById('fontSize');
-        const display = document.getElementById('fontSizeValue');
-        
-        if (slider && display) {
-            display.textContent = slider.value;
+    handleFontSizeChange() {
+        const dropdown = document.getElementById('fontSize');
+
+        if (dropdown) {
+            // Trigger validation
+            this.validateFontSizeField({ target: dropdown });
+
+            // Update preview if it's currently showing
+            if (document.getElementById('previewArea').querySelector('.preview-text')) {
+                this.handlePreview();
+            }
         }
     },
 
@@ -216,7 +274,7 @@ const FormManager = {
         if (!GreenCodeFX.CONFIG.ALLOWED_EXTENSIONS.includes(extension)) {
             return {
                 valid: false,
-                error: 'Only .txt files are allowed'
+                error: `File type ${extension} is not supported. Supported types: ${GreenCodeFX.CONFIG.ALLOWED_EXTENSIONS.join(', ')}`
             };
         }
 
@@ -235,20 +293,84 @@ const FormManager = {
         const placeholder = document.querySelector('.upload-placeholder');
         const success = document.querySelector('.upload-success');
         const fileName = document.getElementById('uploadedFileName');
-        
+
         if (placeholder) placeholder.classList.add('d-none');
         if (success) success.classList.remove('d-none');
         if (fileName) fileName.textContent = `${file.name} (${GreenCodeFX.Utils.formatFileSize(file.size)})`;
+
+        // Detect language for the uploaded file
+        this.detectFileLanguage(file);
+    },
+
+    async detectFileLanguage(file) {
+        try {
+            const text = await this.readFileContent(file);
+            const response = await fetch('/api/text/detect-language', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: text.substring(0, 5000), // First 5KB for detection
+                    filename: file.name
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                this.displayLanguageDetection(result.language);
+            } else {
+                this.displayLanguageDetection(null);
+            }
+        } catch (error) {
+            console.warn('Language detection failed:', error);
+            this.displayLanguageDetection(null);
+        }
+    },
+
+    displayLanguageDetection(languageInfo) {
+        const detectionElement = document.getElementById('languageDetection');
+        if (!detectionElement) return;
+
+        if (languageInfo) {
+            const confidencePercent = Math.round(languageInfo.confidence * 100);
+            const confidenceClass = languageInfo.confidence >= 0.8 ? 'text-success' :
+                                   languageInfo.confidence >= 0.6 ? 'text-warning' : 'text-muted';
+
+            detectionElement.innerHTML = `
+                <small class="${confidenceClass}">
+                    <i class="fas fa-code me-1"></i>
+                    ${languageInfo.name}
+                    <span class="text-muted">(${confidencePercent}% confidence)</span>
+                </small>
+            `;
+        } else {
+            detectionElement.innerHTML = `
+                <small class="text-muted">
+                    <i class="fas fa-file-text me-1"></i>
+                    Plain text
+                </small>
+            `;
+        }
     },
 
     clearFileUpload() {
         const fileInput = document.getElementById('textFile');
         const placeholder = document.querySelector('.upload-placeholder');
         const success = document.querySelector('.upload-success');
-        
+        const languageDetection = document.getElementById('languageDetection');
+
         if (fileInput) fileInput.value = '';
         if (placeholder) placeholder.classList.remove('d-none');
         if (success) success.classList.add('d-none');
+        if (languageDetection) {
+            languageDetection.innerHTML = `
+                <small class="text-muted">
+                    <i class="fas fa-search fa-spin me-1"></i>
+                    Detecting language...
+                </small>
+            `;
+        }
     },
 
     async handlePreview() {
@@ -276,6 +398,21 @@ const FormManager = {
         const previewArea = document.getElementById('previewArea');
         if (!previewArea) return;
 
+        // Check cache first
+        const settingsHash = this.generatePreviewCacheKey(formData);
+        let cachedPreview = null;
+
+        if (GreenCodeFX.CacheManager) {
+            cachedPreview = GreenCodeFX.CacheManager.getCachedPreview(settingsHash);
+        }
+
+        if (cachedPreview) {
+            // Use cached preview
+            this.renderTypingPreview(previewArea, cachedPreview.text, formData);
+            GreenCodeFX.Utils.showToast('Preview loaded from cache', 'info');
+            return;
+        }
+
         // Show loading state
         previewArea.innerHTML = `
             <div class="preview-loading text-center">
@@ -293,6 +430,14 @@ const FormManager = {
                 previewText = previewText.substring(0, 1000) + '\n\n... (preview truncated)';
             }
 
+            // Cache the preview
+            if (GreenCodeFX.CacheManager) {
+                GreenCodeFX.CacheManager.savePreviewCache(settingsHash, {
+                    text: previewText,
+                    settings: formData
+                });
+            }
+
             // Create preview HTML with typing animation
             this.renderTypingPreview(previewArea, previewText, formData);
 
@@ -307,6 +452,67 @@ const FormManager = {
         }
     },
 
+    generatePreviewCacheKey(formData) {
+        // Create cache key based on relevant preview settings
+        const cacheSettings = {
+            font_family: formData.font_family,
+            font_size: formData.font_size,
+            text_color: formData.text_color,
+            typing_speed: formData.typing_speed,
+            textInputMethod: formData.textInputMethod,
+            custom_text: formData.textInputMethod === 'custom' ? formData.custom_text : null
+        };
+
+        return GreenCodeFX.CacheManager ?
+            GreenCodeFX.CacheManager.generateSettingsHash(cacheSettings) :
+            'no-cache';
+    },
+
+    handleOutputFormatChange() {
+        const outputFormat = document.getElementById('outputFormat');
+        const formatDescription = document.getElementById('formatDescription');
+        const generateBtn = document.getElementById('generateBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        if (!outputFormat || !formatDescription) return;
+
+        const format = outputFormat.value;
+        let description = '';
+        let buttonText = 'Generate';
+        let downloadText = 'Download';
+
+        switch (format) {
+            case 'mp4':
+                description = '<strong>MP4:</strong> Best quality, smaller file size, compatible with all video players';
+                buttonText = 'Generate Video';
+                downloadText = 'Download Video';
+                break;
+            case 'gif':
+                description = '<strong>GIF:</strong> Animated image, larger file size, perfect for sharing and web use';
+                buttonText = 'Generate GIF';
+                downloadText = 'Download GIF';
+                break;
+            case 'png':
+                description = '<strong>PNG Sequence:</strong> Individual frames in ZIP archive, largest file size, best for editing';
+                buttonText = 'Generate Frames';
+                downloadText = 'Download ZIP';
+                break;
+        }
+
+        formatDescription.innerHTML = description;
+
+        if (generateBtn) {
+            generateBtn.innerHTML = `<i class="fas fa-play me-1"></i>${buttonText}`;
+        }
+
+        if (downloadBtn) {
+            downloadBtn.innerHTML = `<i class="fas fa-download me-1"></i>${downloadText}`;
+        }
+
+        // Save format preference
+        this.saveCurrentSettings();
+    },
+
     async getPreviewText(formData) {
         try {
             // Use the preview API endpoint for server-side preview generation
@@ -314,6 +520,7 @@ const FormManager = {
             previewData.append('font_family', formData.font_family);
             previewData.append('font_size', formData.font_size);
             previewData.append('text_color', formData.text_color);
+            previewData.append('typing_speed', formData.typing_speed);
             previewData.append('textInputMethod', formData.textInputMethod);
 
             if (formData.textInputMethod === 'custom' && formData.custom_text) {
@@ -414,13 +621,10 @@ class Snake {
     },
 
     getFontFamilyCSS(fontFamily) {
-        const fontMap = {
-            'jetbrains': '"JetBrains Mono", "Courier New", monospace',
-            'courier': '"Courier New", monospace',
-            'consolas': 'Consolas, "Courier New", monospace',
-            'monaco': 'Monaco, "Courier New", monospace'
-        };
-        return fontMap[fontFamily] || '"JetBrains Mono", "Courier New", monospace';
+        // Delegate to FontManager for consistent font handling including Google Fonts
+        return GreenCodeFX.FontManager ?
+            GreenCodeFX.FontManager.getFontFamilyCSS(fontFamily) :
+            '"JetBrains Mono", "Courier New", monospace';
     },
 
     startTypingAnimation(text) {
@@ -513,10 +717,16 @@ class Snake {
             errors.push('Duration must be between 10 and 600 seconds');
         }
 
-        // Validate font size
+        // Validate font size (now in points, 8-150pt)
         const fontSize = parseInt(data.font_size);
-        if (isNaN(fontSize) || fontSize < 12 || fontSize > 72) {
-            errors.push('Font size must be between 12 and 72 pixels');
+        if (isNaN(fontSize) || fontSize < 8 || fontSize > 150) {
+            errors.push('Font size must be between 8 and 150 points');
+        }
+
+        // Validate typing speed
+        const typingSpeed = parseInt(data.typing_speed);
+        if (isNaN(typingSpeed) || typingSpeed < 50 || typingSpeed > 300) {
+            errors.push('Typing speed must be between 50 and 300 WPM');
         }
 
         // Validate color
@@ -577,7 +787,14 @@ class Snake {
         // Font size validation
         const fontSizeInput = document.getElementById('fontSize');
         if (fontSizeInput) {
-            fontSizeInput.addEventListener('input', this.validateFontSizeField.bind(this));
+            fontSizeInput.addEventListener('change', this.validateFontSizeField.bind(this));
+        }
+
+        // Typing speed validation
+        const typingSpeedInput = document.getElementById('typingSpeed');
+        if (typingSpeedInput) {
+            typingSpeedInput.addEventListener('input', this.validateTypingSpeedField.bind(this));
+            typingSpeedInput.addEventListener('blur', this.validateTypingSpeedField.bind(this));
         }
 
         // Color validation
@@ -605,9 +822,17 @@ class Snake {
     validateFontSizeField(event) {
         const input = event.target;
         const value = parseInt(input.value);
-        const isValid = !isNaN(value) && value >= 12 && value <= 72;
+        const isValid = !isNaN(value) && value >= 8 && value <= 150;
 
-        this.setFieldValidation(input, isValid, isValid ? '' : 'Font size must be between 12 and 72 pixels');
+        this.setFieldValidation(input, isValid, isValid ? '' : 'Font size must be between 8 and 150 points');
+    },
+
+    validateTypingSpeedField(event) {
+        const input = event.target;
+        const value = parseInt(input.value);
+        const isValid = !isNaN(value) && value >= 50 && value <= 300;
+
+        this.setFieldValidation(input, isValid, isValid ? '' : 'Typing speed must be between 50 and 300 WPM');
     },
 
     validateColorField(event) {
@@ -667,7 +892,8 @@ class Snake {
         submitData.append('font_family', formData.font_family);
         submitData.append('font_size', formData.font_size);
         submitData.append('text_color', formData.text_color);
-        submitData.append('output_format', 'mp4');
+        submitData.append('typing_speed', formData.typing_speed);
+        submitData.append('output_format', formData.output_format || 'mp4');
 
         // Handle text input based on method
         if (formData.textInputMethod === 'custom') {
@@ -711,6 +937,16 @@ class Snake {
             GreenCodeFX.APP_STATE.currentJobId = result.job_id;
             GreenCodeFX.APP_STATE.jobStartTime = Date.now();
             GreenCodeFX.APP_STATE.estimatedDuration = this.parseEstimatedDuration(result.estimated_duration);
+            GreenCodeFX.APP_STATE.estimationConfidence = result.estimation_confidence || 0.3;
+            GreenCodeFX.APP_STATE.estimationSamples = result.estimation_samples || 0;
+
+            // Update estimation UI
+            if (GreenCodeFX.ProgressEstimationManager) {
+                GreenCodeFX.ProgressEstimationManager.showEstimationTooltip(
+                    GreenCodeFX.APP_STATE.estimationConfidence,
+                    GreenCodeFX.APP_STATE.estimationSamples
+                );
+            }
 
             // Start polling for job status
             this.startJobPolling();
@@ -906,12 +1142,17 @@ class Snake {
                     videoDuration.textContent = `${jobData.parameters.duration}s`;
                 }
 
-                // Show completion notification
+                // Show completion notification and video preview
                 this.showCompletionNotification(jobData);
+                this.showVideoPreview(jobData);
                 break;
             case 'failed':
                 statusHTML = '<div class="status-error"><i class="fas fa-exclamation-triangle text-danger me-2"></i><span class="text-danger">Generation failed</span></div>';
                 progressTextContent = jobData.error || 'Unknown error occurred';
+
+                // Show enhanced error information with recovery suggestions
+                this.showErrorRecoveryInfo(jobData);
+
                 GreenCodeFX.Utils.showToast(`Generation failed: ${jobData.error || 'Unknown error'}`, 'error');
                 break;
             default:
@@ -941,10 +1182,23 @@ class Snake {
 
         const elapsed = (Date.now() - GreenCodeFX.APP_STATE.jobStartTime) / 1000;
         const progress = jobData.progress || 0;
+        const confidence = GreenCodeFX.APP_STATE.estimationConfidence || 0.3;
+        const samples = GreenCodeFX.APP_STATE.estimationSamples || 0;
 
         if (progress > 0) {
-            const estimatedTotal = (elapsed / progress) * 100;
-            const remaining = Math.max(0, estimatedTotal - elapsed);
+            // Use both historical estimate and real-time progress for better accuracy
+            const realtimeEstimate = (elapsed / progress) * 100;
+            const historicalEstimate = GreenCodeFX.APP_STATE.estimatedDuration;
+
+            // Weight the estimates based on confidence and progress
+            const progressWeight = Math.min(progress / 50, 1); // More weight as progress increases
+            const confidenceWeight = confidence;
+
+            const blendedEstimate = (realtimeEstimate * progressWeight) +
+                                  (historicalEstimate * (1 - progressWeight) * confidenceWeight) +
+                                  (realtimeEstimate * (1 - confidenceWeight));
+
+            const remaining = Math.max(0, blendedEstimate - elapsed);
 
             if (remaining > 60) {
                 const minutes = Math.floor(remaining / 60);
@@ -954,21 +1208,41 @@ class Snake {
                 return `~${Math.floor(remaining)}s remaining`;
             }
         } else {
-            return `~${GreenCodeFX.APP_STATE.estimatedDuration}s estimated`;
+            // Show initial estimate with confidence indicator
+            const confidenceText = this.getConfidenceText(confidence, samples);
+            return `~${GreenCodeFX.APP_STATE.estimatedDuration}s estimated ${confidenceText}`;
+        }
+    },
+
+    getConfidenceText(confidence, samples) {
+        if (samples === 0) {
+            return '(new estimate)';
+        } else if (confidence >= 0.8) {
+            return '(high confidence)';
+        } else if (confidence >= 0.6) {
+            return '(good estimate)';
+        } else if (confidence >= 0.4) {
+            return '(fair estimate)';
+        } else {
+            return '(rough estimate)';
         }
     },
 
     showCompletionNotification(jobData) {
-        // Show browser notification if supported and permission granted
-        if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('Video Generation Complete', {
-                body: `Your typing effect video is ready for download (${jobData.file_size || 'Unknown size'})`,
-                icon: '/static/favicon.ico',
-                tag: 'video-complete'
-            });
+        // Use the new NotificationManager for browser notifications
+        if (GreenCodeFX.NotificationManager) {
+            const fileName = jobData.download_url ? jobData.download_url.split('/').pop() : 'video';
+            GreenCodeFX.NotificationManager.showVideoCompleteNotification(jobData.job_id, fileName);
         }
 
         GreenCodeFX.Utils.showToast('Video generation completed successfully!', 'success');
+    },
+
+    showVideoPreview(jobData) {
+        // Use the new VideoPreviewManager to show inline video preview
+        if (GreenCodeFX.VideoPreviewManager && jobData.download_url) {
+            GreenCodeFX.VideoPreviewManager.showVideoPreview(jobData.download_url);
+        }
     },
 
     /**
@@ -1027,6 +1301,119 @@ class Snake {
         } catch (error) {
             console.error('Failed to copy link:', error);
             GreenCodeFX.Utils.showToast('Failed to copy link', 'error');
+        }
+    },
+
+    /**
+     * Error Recovery Information Display
+     */
+    showErrorRecoveryInfo(jobData) {
+        // Show error recovery information if available
+        if (jobData.recovery_suggestion || jobData.error_category) {
+            const statusArea = document.getElementById('statusArea');
+            if (!statusArea) return;
+
+            let recoveryHTML = '';
+
+            if (jobData.error_category) {
+                const categoryInfo = this.getErrorCategoryInfo(jobData.error_category);
+                recoveryHTML += `
+                    <div class="error-category mt-2">
+                        <small class="text-muted">
+                            <i class="fas fa-tag me-1"></i>
+                            Error Type: <span class="badge bg-secondary">${categoryInfo.name}</span>
+                        </small>
+                    </div>
+                `;
+            }
+
+            if (jobData.recovery_suggestion) {
+                const suggestion = jobData.recovery_suggestion;
+                const confidencePercent = Math.round(suggestion.confidence * 100);
+                const successPercent = Math.round(suggestion.estimated_success_rate * 100);
+
+                recoveryHTML += `
+                    <div class="recovery-suggestion mt-2">
+                        <div class="card bg-dark border-warning">
+                            <div class="card-body py-2">
+                                <h6 class="card-title text-warning mb-1">
+                                    <i class="fas fa-tools me-1"></i>Recovery Suggestion
+                                </h6>
+                                <p class="card-text small mb-1">${suggestion.description}</p>
+                                <div class="d-flex justify-content-between">
+                                    <small class="text-muted">
+                                        Confidence: ${confidencePercent}%
+                                    </small>
+                                    <small class="text-muted">
+                                        Success Rate: ${successPercent}%
+                                    </small>
+                                </div>
+                                <button class="btn btn-outline-warning btn-sm mt-2" onclick="FormManager.retryWithRecovery('${jobData.job_id}')">
+                                    <i class="fas fa-redo me-1"></i>Try Recovery
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (recoveryHTML) {
+                statusArea.innerHTML += recoveryHTML;
+            }
+        }
+    },
+
+    getErrorCategoryInfo(category) {
+        const categoryMap = {
+            'network': { name: 'Network', icon: 'wifi' },
+            'validation': { name: 'Validation', icon: 'exclamation-circle' },
+            'resource': { name: 'Resource', icon: 'memory' },
+            'system': { name: 'System', icon: 'cog' },
+            'ffmpeg': { name: 'Video Processing', icon: 'video' },
+            'pygame': { name: 'Graphics', icon: 'paint-brush' },
+            'file_io': { name: 'File Operation', icon: 'file' },
+            'timeout': { name: 'Timeout', icon: 'clock' },
+            'unknown': { name: 'Unknown', icon: 'question' }
+        };
+
+        return categoryMap[category] || categoryMap['unknown'];
+    },
+
+    async retryWithRecovery(jobId) {
+        try {
+            // Get the original job data to retry with same parameters
+            const response = await fetch(`/api/jobs/${jobId}`);
+            if (!response.ok) {
+                throw new Error('Failed to get job details');
+            }
+
+            const jobData = await response.json();
+            const originalParams = jobData.parameters;
+
+            // Show retry notification
+            GreenCodeFX.Utils.showToast('Retrying with recovery strategy...', 'info');
+
+            // Clear current error state
+            this.setGeneratingState(false);
+
+            // Retry the generation with original parameters
+            const formData = {
+                duration: originalParams.duration,
+                source_file: originalParams.source_file,
+                output_format: originalParams.output_format,
+                font_family: originalParams.font_family,
+                font_size: originalParams.font_size,
+                text_color: originalParams.text_color,
+                typing_speed: originalParams.typing_speed,
+                custom_text: originalParams.custom_text,
+                textInputMethod: originalParams.custom_text ? 'custom' : 'default'
+            };
+
+            await this.submitVideoGeneration(formData);
+
+        } catch (error) {
+            console.error('Recovery retry failed:', error);
+            GreenCodeFX.Utils.showToast('Recovery retry failed. Please try again manually.', 'error');
         }
     },
 

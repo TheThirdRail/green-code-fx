@@ -19,10 +19,16 @@ import structlog
 try:
     from .config import config
     from .performance_profiler import profiler
+    from .progress_estimator import progress_estimator
+    from .error_recovery import error_recovery_service, ErrorContext
+    from .text_processor import text_processor
 except ImportError:
     # Handle direct execution
     from config import config
     from performance_profiler import profiler
+    from progress_estimator import progress_estimator
+    from error_recovery import error_recovery_service, ErrorContext
+    from text_processor import text_processor
 
 
 logger = structlog.get_logger()
@@ -71,6 +77,7 @@ class VideoGenerator:
         font_family: str = "jetbrains",
         font_size: int = None,
         text_color: str = "#00FF00",
+        typing_speed: int = None,
         custom_text: Optional[str] = None,
         uploaded_file_path: Optional[str] = None,
         progress_callback: Optional[Callable[[int], None]] = None
@@ -84,8 +91,9 @@ class VideoGenerator:
             source_file: Source code file to display (ignored if custom_text or uploaded_file_path provided)
             output_format: Output format ('mp4' or 'png')
             font_family: Font family to use ('jetbrains', 'courier', etc.)
-            font_size: Font size in pixels (defaults to config value)
+            font_size: Font size in points (defaults to config value)
             text_color: Text color in hex format (#RRGGBB)
+            typing_speed: Typing speed in words per minute (defaults to config value)
             custom_text: Custom text to display instead of source file
             uploaded_file_path: Path to uploaded text file
             progress_callback: Optional progress callback function
@@ -97,12 +105,23 @@ class VideoGenerator:
         if font_size is None:
             font_size = config.TYPING_FONT_SIZE
 
+        # Use default typing speed if not provided
+        if typing_speed is None:
+            typing_speed = config.TYPING_WPM
+
+        # Calculate character delay from WPM (Words Per Minute)
+        # Average word length is ~5 characters, so chars per minute = WPM * 5
+        chars_per_minute = typing_speed * 5
+        chars_per_second = chars_per_minute / 60
+        char_delay_ms = int(1000 / chars_per_second)
+
         # Convert hex color to RGB
         text_color_rgb = config.hex_to_rgb(text_color)
 
         logger.info("Starting typing effect generation",
                    job_id=job_id, duration=duration, source_file=source_file,
-                   font_family=font_family, font_size=font_size, text_color=text_color)
+                   font_family=font_family, font_size=font_size, text_color=text_color,
+                   typing_speed=typing_speed, char_delay_ms=char_delay_ms)
 
         # Start overall profiling
         profiler.start_operation("typing_effect_total",
@@ -119,14 +138,17 @@ class VideoGenerator:
             # Load text content (priority: uploaded file > custom text > source file)
             profiler.start_operation("load_text_content")
 
+            # Load and process text with smart text processing
             if uploaded_file_path:
                 # Load from uploaded file
                 with open(uploaded_file_path, 'r', encoding='utf-8') as f:
-                    code_lines = [line.rstrip() for line in f.readlines()]
-                content_source = f"uploaded file: {Path(uploaded_file_path).name}"
+                    text_content = f.read()
+                filename = Path(uploaded_file_path).name
+                content_source = f"uploaded file: {filename}"
             elif custom_text:
                 # Use custom text
-                code_lines = [line.rstrip() for line in custom_text.splitlines()]
+                text_content = custom_text
+                filename = None
                 content_source = "custom text input"
             else:
                 # Load from source file
@@ -135,8 +157,121 @@ class VideoGenerator:
                     raise FileNotFoundError(f"Source file not found: {source_path}")
 
                 with open(source_path, 'r', encoding='utf-8') as f:
-                    code_lines = [line.rstrip() for line in f.readlines()]
+                    text_content = f.read()
+                filename = source_file
                 content_source = f"source file: {source_file}"
+
+            # Process text with language detection and syntax highlighting
+            processed_text = text_processor.process_text(
+                text=text_content,
+                filename=filename,
+                typing_speed=typing_speed
+            )
+
+            # Extract lines for typing effect
+            code_lines = [line.rstrip() for line in processed_text.lines]
+
+            logger.info("Text processed with smart features",
+                       job_id=job_id,
+                       language=processed_text.language_info.name,
+                       confidence=processed_text.language_info.confidence,
+                       detection_method=processed_text.language_info.detection_method,
+                       total_tokens=len(processed_text.tokens),
+                       estimated_typing_time=processed_text.estimated_typing_time)
+
+            # Store processed text for syntax highlighting
+            self.processed_text = processed_text
+
+    def render_syntax_highlighted_text(self, text: str, font: pygame.font.Font,
+                                     x: int, y: int, line_number: int = 0) -> int:
+        """
+        Render text with syntax highlighting support.
+
+        Args:
+            text: Text to render
+            font: Pygame font object
+            x: X position
+            y: Y position
+            line_number: Line number for token lookup
+
+        Returns:
+            Width of rendered text
+        """
+        if not hasattr(self, 'processed_text') or not self.processed_text.tokens:
+            # Fallback to plain text rendering
+            text_surface = font.render(text, True, config.hex_to_rgb(self.processed_text.language_info.name if hasattr(self, 'processed_text') else "#00FF00"))
+            self.screen.blit(text_surface, (x, y))
+            return text_surface.get_width()
+
+        # Find tokens for this text
+        current_x = x
+        text_start = sum(len(line) + 1 for line in self.processed_text.lines[:line_number])  # +1 for newlines
+        text_end = text_start + len(text)
+
+        # Find relevant tokens
+        relevant_tokens = []
+        for token in self.processed_text.tokens:
+            if (token.start_pos < text_end and token.end_pos > text_start):
+                # Calculate overlap
+                overlap_start = max(token.start_pos, text_start)
+                overlap_end = min(token.end_pos, text_end)
+
+                if overlap_start < overlap_end:
+                    # Extract the overlapping text
+                    token_text_start = overlap_start - token.start_pos
+                    token_text_end = token_text_start + (overlap_end - overlap_start)
+                    overlapping_text = token.text[token_text_start:token_text_end]
+
+                    # Calculate position within the line
+                    line_offset = overlap_start - text_start
+
+                    relevant_tokens.append({
+                        'text': overlapping_text,
+                        'color': token.color,
+                        'offset': line_offset
+                    })
+
+        # Sort tokens by offset
+        relevant_tokens.sort(key=lambda t: t['offset'])
+
+        # Render tokens with colors
+        last_offset = 0
+        for token_info in relevant_tokens:
+            offset = token_info['offset']
+
+            # Render any plain text before this token
+            if offset > last_offset:
+                plain_text = text[last_offset:offset]
+                if plain_text:
+                    color = config.hex_to_rgb("#00FF00")  # Default green
+                    text_surface = font.render(plain_text, True, color)
+                    self.screen.blit(text_surface, (current_x, y))
+                    current_x += text_surface.get_width()
+
+            # Render the colored token
+            token_text = token_info['text']
+            if token_text:
+                try:
+                    color = config.hex_to_rgb(token_info['color'])
+                except:
+                    color = config.hex_to_rgb("#00FF00")  # Fallback to green
+
+                text_surface = font.render(token_text, True, color)
+                self.screen.blit(text_surface, (current_x, y))
+                current_x += text_surface.get_width()
+
+            last_offset = offset + len(token_info['text'])
+
+        # Render any remaining plain text
+        if last_offset < len(text):
+            remaining_text = text[last_offset:]
+            if remaining_text:
+                color = config.hex_to_rgb("#00FF00")  # Default green
+                text_surface = font.render(remaining_text, True, color)
+                self.screen.blit(text_surface, (current_x, y))
+                current_x += text_surface.get_width()
+
+        return current_x - x
 
             profiler.end_operation("load_text_content",
                                  lines_loaded=len(code_lines),
@@ -199,7 +334,7 @@ class VideoGenerator:
 
             # Set up typing timer
             TYPE_EVENT = pygame.USEREVENT + 1
-            pygame.time.set_timer(TYPE_EVENT, config.TYPING_CHAR_DELAY_MS)
+            pygame.time.set_timer(TYPE_EVENT, char_delay_ms)
             
             # Main generation loop
             profiler.start_operation("main_rendering_loop", total_frames=total_frames)
@@ -249,8 +384,9 @@ class VideoGenerator:
                     if visible_line_count >= max_visible_lines:
                         break
 
-                    text_surface = font.render(line, True, text_color_rgb)
-                    self.screen.blit(text_surface, (10, y_offset))
+                    # Use syntax highlighting for complete lines
+                    self.render_syntax_highlighted_text(line, font, 10, y_offset,
+                                                       start_line + visible_line_count)
                     y_offset += line_height
                     visible_line_count += 1
 
@@ -261,8 +397,9 @@ class VideoGenerator:
 
                     partial_line = code_lines[current_line][:current_char]
                     if partial_line:
-                        text_surface = font.render(partial_line, True, text_color_rgb)
-                        self.screen.blit(text_surface, (10, y_offset))
+                        # Use syntax highlighting for partial lines
+                        self.render_syntax_highlighted_text(partial_line, font, 10, y_offset,
+                                                           current_line)
 
                     # Draw blinking cursor
                     cursor_blink_timer += 1
@@ -310,7 +447,7 @@ class VideoGenerator:
                     loop_state = "typing"
 
                     # Restart typing timer
-                    pygame.time.set_timer(TYPE_EVENT, config.TYPING_CHAR_DELAY_MS)
+                    pygame.time.set_timer(TYPE_EVENT, char_delay_ms)
 
                 # Update display
                 pygame.display.flip()
@@ -341,6 +478,10 @@ class VideoGenerator:
                 profiler.start_operation("video_assembly", format="mp4")
                 output_file = self._assemble_video(job_id, frames_dir, "typing")
                 profiler.end_operation("video_assembly")
+            elif output_format == "gif":
+                profiler.start_operation("gif_assembly", format="gif")
+                output_file = self._assemble_gif(job_id, frames_dir, "typing")
+                profiler.end_operation("gif_assembly")
             else:
                 profiler.start_operation("png_archive", format="png")
                 output_file = self._create_png_archive(job_id, frames_dir, "typing")
@@ -349,10 +490,41 @@ class VideoGenerator:
             if progress_callback:
                 progress_callback(100)
 
-            profiler.end_operation("typing_effect_total",
-                                 frames_generated=frame_count,
-                                 output_file=output_file,
-                                 success=True)
+            # Get total generation time from profiler
+            total_generation_time = profiler.end_operation("typing_effect_total",
+                                                         frames_generated=frame_count,
+                                                         output_file=output_file,
+                                                         success=True)
+
+            # Record metrics for progress estimation
+            try:
+                file_size = output_file.stat().st_size if output_file.exists() else 0
+                generation_time = total_generation_time.duration if total_generation_time else 0
+
+                # Prepare parameters for recording
+                estimation_parameters = {
+                    "duration": duration,
+                    "source_file": source_file,
+                    "output_format": output_format,
+                    "font_family": font_family,
+                    "font_size": font_size,
+                    "text_color": text_color,
+                    "typing_speed": typing_speed,
+                    "custom_text": custom_text
+                }
+
+                progress_estimator.record_generation(
+                    job_id=job_id,
+                    effect_type="typing",
+                    parameters=estimation_parameters,
+                    generation_time=generation_time,
+                    frame_count=frame_count,
+                    file_size_bytes=file_size,
+                    success=True
+                )
+            except Exception as e:
+                logger.warning("Failed to record generation metrics",
+                             job_id=job_id, error=str(e))
 
             logger.info("Typing effect generation completed",
                        job_id=job_id, output_file=output_file, frames=frame_count)
@@ -360,9 +532,39 @@ class VideoGenerator:
             return output_file
 
         except Exception as e:
-            profiler.end_operation("typing_effect_total",
-                                 error=str(e),
-                                 success=False)
+            total_generation_time = profiler.end_operation("typing_effect_total",
+                                                         error=str(e),
+                                                         success=False)
+
+            # Record failed generation metrics
+            try:
+                generation_time = total_generation_time.duration if total_generation_time else 0
+
+                estimation_parameters = {
+                    "duration": duration,
+                    "source_file": source_file,
+                    "output_format": output_format,
+                    "font_family": font_family,
+                    "font_size": font_size,
+                    "text_color": text_color,
+                    "typing_speed": typing_speed,
+                    "custom_text": custom_text
+                }
+
+                progress_estimator.record_generation(
+                    job_id=job_id,
+                    effect_type="typing",
+                    parameters=estimation_parameters,
+                    generation_time=generation_time,
+                    frame_count=0,
+                    file_size_bytes=0,
+                    success=False,
+                    error_message=str(e)
+                )
+            except Exception as record_error:
+                logger.warning("Failed to record failed generation metrics",
+                             job_id=job_id, error=str(record_error))
+
             logger.error("Typing effect generation failed", job_id=job_id, error=str(e))
             raise
     
@@ -402,21 +604,149 @@ class VideoGenerator:
         ]
         
         logger.info("Assembling video with FFmpeg", job_id=job_id, output_file=output_file)
-        
+
+        # Create error context for recovery
+        context = ErrorContext(
+            operation="ffmpeg_video_assembly",
+            job_id=job_id,
+            parameters={"output_format": "mp4", "frames_dir": str(frames_dir)},
+            attempt_number=1,
+            timestamp=time.time(),
+            duration_before_error=0
+        )
+
+        def ffmpeg_operation():
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                logger.info("Video assembly completed", job_id=job_id)
+                return result
+            except subprocess.CalledProcessError as e:
+                logger.error("FFmpeg failed", job_id=job_id, error=e.stderr)
+                raise RuntimeError(f"Video assembly failed: {e.stderr}")
+
         try:
-            subprocess.run(cmd, capture_output=True, text=True, check=True)
-            logger.info("Video assembly completed", job_id=job_id)
-            
+            # Execute with error recovery
+            error_recovery_service.execute_retry_strategy(
+                operation=ffmpeg_operation,
+                context=context,
+                max_retries=2,
+                base_delay=2.0
+            )
+
+            # Clean up frame files on success
+            import shutil
+            shutil.rmtree(frames_dir)
+
+            return str(output_file)
+
+        except Exception as e:
+            # Analyze error and provide recovery recommendations
+            error_report = error_recovery_service.analyze_error(e, context)
+            logger.error("Video assembly failed after recovery attempts",
+                        job_id=job_id,
+                        error_id=error_report.error_id,
+                        category=error_report.category.value,
+                        user_message=error_report.user_message)
+            raise
+
+    def _assemble_gif(self, job_id: str, frames_dir: Path, effect_type: str) -> str:
+        """
+        Assemble PNG frames into GIF using FFmpeg with optimized settings.
+
+        Creates a high-quality GIF with optimized palette and compression.
+        Uses a two-pass approach for better quality and smaller file size.
+
+        Args:
+            job_id: Unique job identifier for output naming
+            frames_dir: Directory containing PNG frame sequence
+            effect_type: Type of effect for filename generation
+
+        Returns:
+            Path to the generated GIF file
+        """
+        output_file = config.OUTPUT_DIR / f"{job_id}_{effect_type}.gif"
+        palette_file = config.TEMP_DIR / f"{job_id}_palette.png"
+
+        # Ensure temp directory exists
+        config.TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+        logger.info("Assembling GIF with FFmpeg", job_id=job_id, output_file=output_file)
+
+        # Create error context for recovery
+        context = ErrorContext(
+            operation="ffmpeg_gif_assembly",
+            job_id=job_id,
+            parameters={"output_format": "gif", "frames_dir": str(frames_dir)},
+            attempt_number=1,
+            timestamp=time.time(),
+            duration_before_error=0
+        )
+
+        def gif_operation():
+            try:
+                # First pass: Generate optimized palette
+                palette_cmd = [
+                    "ffmpeg", "-y",
+                    "-framerate", str(config.TARGET_FPS),
+                    "-i", str(frames_dir / "frame_%06d.png"),
+                    "-vf", "palettegen=max_colors=256:reserve_transparent=0",
+                    str(palette_file)
+                ]
+
+                subprocess.run(palette_cmd, capture_output=True, text=True, check=True)
+
+                # Second pass: Create GIF using the generated palette
+                gif_cmd = [
+                    "ffmpeg", "-y",
+                    "-framerate", str(config.TARGET_FPS),
+                    "-i", str(frames_dir / "frame_%06d.png"),
+                    "-i", str(palette_file),
+                    "-lavfi", "paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle",
+                    "-loop", "0",  # Infinite loop
+                    str(output_file)
+                ]
+
+                subprocess.run(gif_cmd, capture_output=True, text=True, check=True)
+                logger.info("GIF assembly completed", job_id=job_id)
+                return True
+
+            except subprocess.CalledProcessError as e:
+                logger.error("FFmpeg GIF generation failed", job_id=job_id, error=e.stderr)
+                raise RuntimeError(f"GIF assembly failed: {e.stderr}")
+
+        try:
+            # Execute with error recovery
+            error_recovery_service.execute_retry_strategy(
+                operation=gif_operation,
+                context=context,
+                max_retries=2,
+                base_delay=2.0
+            )
+
+            # Clean up palette file on success
+            if palette_file.exists():
+                palette_file.unlink()
+
             # Clean up frame files
             import shutil
             shutil.rmtree(frames_dir)
-            
+
             return str(output_file)
-            
-        except subprocess.CalledProcessError as e:
-            logger.error("FFmpeg failed", job_id=job_id, error=e.stderr)
-            raise RuntimeError(f"Video assembly failed: {e.stderr}")
-    
+
+        except Exception as e:
+            # Clean up on failure
+            if palette_file.exists():
+                palette_file.unlink()
+
+            # Analyze error and provide recovery recommendations
+            error_report = error_recovery_service.analyze_error(e, context)
+            logger.error("GIF assembly failed after recovery attempts",
+                        job_id=job_id,
+                        error_id=error_report.error_id,
+                        category=error_report.category.value,
+                        user_message=error_report.user_message)
+            raise
+
     def _create_png_archive(self, job_id: str, frames_dir: Path, effect_type: str) -> str:
         """Create ZIP archive of PNG frames."""
         import zipfile

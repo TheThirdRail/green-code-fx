@@ -1,27 +1,54 @@
 /* Green-Code FX Custom Styles */
 
 :root {
+    /* Dark Theme (Default) */
     --primary-green: #00FF00;
     --dark-green: #00CC00;
     --bg-dark: #1a1a1a;
     --bg-darker: #0d1117;
     --border-color: #30363d;
     --text-muted: #8b949e;
+    --text-primary: #ffffff;
+    --text-secondary: #e6e6e6;
+    --card-bg: #1a1a1a;
+    --navbar-bg: #0d1117;
+    --footer-bg: #0d1117;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+    --primary-green: #00AA00;
+    --dark-green: #008800;
+    --bg-dark: #ffffff;
+    --bg-darker: #f8f9fa;
+    --border-color: #dee2e6;
+    --text-muted: #6c757d;
+    --text-primary: #212529;
+    --text-secondary: #495057;
+    --card-bg: #ffffff;
+    --navbar-bg: #f8f9fa;
+    --footer-bg: #f8f9fa;
+}
+
+/* Theme transition animation */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 /* Global Styles */
 body {
     background-color: var(--bg-dark) !important;
+    color: var(--text-primary) !important;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 /* Custom Bootstrap Overrides */
 .bg-dark {
-    background-color: var(--bg-dark) !important;
+    background-color: var(--card-bg) !important;
 }
 
 .bg-black {
-    background-color: var(--bg-darker) !important;
+    background-color: var(--navbar-bg) !important;
 }
 
 .border-success {
@@ -67,20 +94,20 @@ body {
 .form-control {
     background-color: var(--bg-darker) !important;
     border-color: var(--border-color) !important;
-    color: #fff !important;
+    color: var(--text-primary) !important;
 }
 
 .form-control:focus {
     background-color: var(--bg-darker) !important;
     border-color: var(--primary-green) !important;
     box-shadow: 0 0 0 0.2rem rgba(0, 255, 0, 0.25) !important;
-    color: #fff !important;
+    color: var(--text-primary) !important;
 }
 
 .form-select {
     background-color: var(--bg-darker) !important;
     border-color: var(--border-color) !important;
-    color: #fff !important;
+    color: var(--text-primary) !important;
 }
 
 .form-select:focus {
@@ -239,16 +266,162 @@ body {
 }
 
 .navbar-nav .nav-link {
-    color: rgba(255, 255, 255, 0.75) !important;
+    color: var(--text-muted) !important;
 }
 
 .navbar-nav .nav-link:hover {
     color: var(--primary-green) !important;
 }
 
+/* Theme Toggle Button */
+.theme-toggle {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.theme-toggle:hover {
+    color: var(--primary-green);
+    border-color: var(--primary-green);
+}
+
+.theme-toggle i {
+    font-size: 1rem;
+}
+
 /* Footer */
 footer {
     margin-top: auto;
+    background-color: var(--footer-bg) !important;
+}
+
+/* Touch-Friendly Controls */
+.touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+}
+
+.btn {
+    min-height: 44px;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+}
+
+/* Enhanced Form Controls for Touch */
+.form-control,
+.form-select {
+    min-height: 44px;
+    font-size: 16px; /* Prevents zoom on iOS */
+    touch-action: manipulation;
+}
+
+.form-check-input {
+    min-height: 20px;
+    min-width: 20px;
+    touch-action: manipulation;
+}
+
+/* Mobile-Specific UI Patterns */
+.mobile-fab {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: var(--primary-green);
+    color: #000;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 255, 0, 0.3);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    touch-action: manipulation;
+    transition: all 0.3s ease;
+}
+
+.mobile-fab:hover,
+.mobile-fab:active {
+    background-color: var(--dark-green);
+    transform: scale(1.1);
+}
+
+.mobile-bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--card-bg);
+    border-top: 2px solid var(--primary-green);
+    border-radius: 16px 16px 0 0;
+    padding: 20px;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    z-index: 1050;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.mobile-bottom-sheet.show {
+    transform: translateY(0);
+}
+
+.mobile-bottom-sheet-handle {
+    width: 40px;
+    height: 4px;
+    background-color: var(--text-muted);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+    cursor: pointer;
+}
+
+/* Swipe Gesture Indicators */
+.swipe-indicator {
+    position: relative;
+    overflow: hidden;
+}
+
+.swipe-indicator::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid var(--text-muted);
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    opacity: 0.6;
+}
+
+.swipe-feedback {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.1), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    pointer-events: none;
+}
+
+.swipe-feedback.active {
+    transform: translateX(100%);
 }
 
 /* Responsive Design */
@@ -257,18 +430,295 @@ footer {
         padding-left: 15px;
         padding-right: 15px;
     }
-    
+
     .preview-container {
         min-height: 150px;
         font-size: 12px;
     }
-    
+
     .file-upload-area {
         min-height: 120px;
+        touch-action: manipulation;
     }
-    
+
     .card-body {
         padding: 1rem;
+    }
+
+    /* Show mobile FAB */
+    .mobile-fab {
+        display: flex;
+    }
+
+    /* Enhanced touch targets */
+    .navbar-toggler {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 8px;
+    }
+
+    .theme-toggle {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Improved form layout */
+    .row .col-md-6,
+    .row .col-lg-6 {
+        margin-bottom: 1rem;
+    }
+
+    /* Better spacing for mobile */
+    .mb-3 {
+        margin-bottom: 1.5rem !important;
+    }
+}
+
+/* Tablet Optimizations */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .container-fluid {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .card-body {
+        padding: 1.5rem;
+    }
+
+    /* Optimize for tablet touch */
+    .btn {
+        min-height: 40px;
+    }
+
+    .form-control,
+    .form-select {
+        min-height: 40px;
+    }
+
+    /* Hide mobile FAB on tablet */
+    .mobile-fab {
+        display: none;
+    }
+}
+
+/* Large Mobile / Small Tablet */
+@media (max-width: 480px) {
+    .container-fluid {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    .card-body {
+        padding: 0.75rem;
+    }
+
+    .navbar-brand {
+        font-size: 1.25rem;
+    }
+
+    /* Stack form elements more aggressively */
+    .row > [class*="col-"] {
+        margin-bottom: 1rem;
+    }
+
+    /* Larger touch targets for small screens */
+    .btn {
+        min-height: 48px;
+        font-size: 1rem;
+    }
+
+    .form-control,
+    .form-select {
+        min-height: 48px;
+        font-size: 16px;
+    }
+
+    /* Improve text readability */
+    .preview-container {
+        font-size: 14px;
+        line-height: 1.4;
+    }
+}
+
+/* Landscape Mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    .mobile-fab {
+        bottom: 10px;
+        right: 10px;
+        width: 48px;
+        height: 48px;
+        font-size: 1.25rem;
+    }
+
+    .mobile-bottom-sheet {
+        max-height: 70vh;
+    }
+
+    /* Compact navbar for landscape */
+    .navbar {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+    }
+
+    .navbar-brand {
+        font-size: 1.25rem;
+    }
+}
+
+/* High DPI / Retina Displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .btn,
+    .form-control,
+    .form-select {
+        border-width: 0.5px;
+    }
+
+    .mobile-fab {
+        box-shadow: 0 2px 8px rgba(0, 255, 0, 0.4);
+    }
+}
+
+/* Accessibility - Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    .btn:active {
+        transform: none;
+    }
+
+    .mobile-fab:hover,
+    .mobile-fab:active {
+        transform: none;
+    }
+
+    .mobile-bottom-sheet {
+        transition: none;
+    }
+
+    .swipe-feedback {
+        transition: none;
+    }
+}
+
+/* Dark Mode Specific Mobile Adjustments */
+@media (max-width: 768px) and (prefers-color-scheme: dark) {
+    .mobile-bottom-sheet {
+        background-color: var(--bg-darker);
+        border-top-color: var(--primary-green);
+    }
+}
+
+/* Touch Feedback Styles */
+.touch-active {
+    background-color: var(--primary-green) !important;
+    color: #000 !important;
+    transform: scale(0.98);
+}
+
+.btn.touch-active {
+    box-shadow: 0 0 0 0.2rem rgba(0, 255, 0, 0.5);
+}
+
+/* Mobile Device Specific Styles */
+.mobile-device .card {
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-device .btn {
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.mobile-device .form-control,
+.mobile-device .form-select {
+    border-radius: 8px;
+}
+
+/* Touch Device Specific Styles */
+.touch-device .btn:hover {
+    transform: none; /* Disable hover effects on touch devices */
+}
+
+.touch-device .card:hover {
+    transform: none;
+}
+
+/* Reduced Animations for Low-End Devices */
+.reduced-animations * {
+    animation-duration: 0.1s !important;
+    transition-duration: 0.1s !important;
+}
+
+.reduced-animations .loading-spinner {
+    animation: none;
+    border: 3px solid var(--primary-green);
+}
+
+/* Landscape Mode Adjustments */
+.landscape-mode .mobile-bottom-sheet {
+    max-height: 60vh;
+}
+
+.landscape-mode .navbar {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+/* Portrait Mode Adjustments */
+.portrait-mode .mobile-fab {
+    bottom: 20px;
+    right: 20px;
+}
+
+/* Lazy Loading Styles */
+.lazy-load {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.lazy-load.loaded {
+    opacity: 1;
+}
+
+/* Enhanced File Upload for Mobile */
+.mobile-device .file-upload-area {
+    border-radius: 12px;
+    border: 2px dashed var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.mobile-device .file-upload-area:hover,
+.mobile-device .file-upload-area.dragover {
+    border-color: var(--primary-green);
+    background-color: rgba(0, 255, 0, 0.05);
+}
+
+/* Mobile Navigation Enhancements */
+.mobile-device .navbar-toggler {
+    border: none;
+    padding: 0.5rem;
+}
+
+.mobile-device .navbar-toggler:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 255, 0, 0.25);
+}
+
+/* Mobile Form Enhancements */
+.mobile-device .form-floating > label {
+    padding: 1rem 0.75rem;
+}
+
+.mobile-device .input-group-text {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+}
+
+/* Print Styles for Mobile */
+@media print {
+    .mobile-fab,
+    .mobile-bottom-sheet,
+    .swipe-indicator::after {
+        display: none !important;
     }
 }
 

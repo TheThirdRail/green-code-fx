@@ -25,15 +25,27 @@ try:
     from .resource_manager import (initialize_resource_management, shutdown_resource_management,
                                   get_resource_status, queue_video_job, JobPriority)
     from .metrics import metrics, track_http_request, start_metrics_updater
+    from .progress_estimator import progress_estimator
+    from .error_recovery import error_recovery_service
+    from .text_processor import text_processor
+    from .batch_processor import batch_processor
+    from .websocket_server import websocket_manager, start_websocket_server_thread
+    from .collaboration_manager import collaboration_manager
 except ImportError:
     # Handle direct execution
     from config import config
     from video_generator import VideoGenerator, JobStatus
     from rate_limiter import rate_limit_decorator, add_rate_limit_headers, get_rate_limit_status
     from graceful_shutdown import initialize_shutdown_handler
+    from progress_estimator import progress_estimator
+    from error_recovery import error_recovery_service
+    from text_processor import text_processor
     from resource_manager import (initialize_resource_management, shutdown_resource_management,
                                   get_resource_status, queue_video_job, JobPriority)
     from metrics import metrics, track_http_request, start_metrics_updater
+    from batch_processor import batch_processor
+    from websocket_server import websocket_manager, start_websocket_server_thread
+    from collaboration_manager import collaboration_manager
 
 
 # Configure structured logging
@@ -185,6 +197,125 @@ def prometheus_metrics():
         return "# Metrics unavailable\n", 500, {'Content-Type': 'text/plain'}
 
 
+@app.route("/api/estimation/statistics", methods=["GET"])
+@track_http_request
+def estimation_statistics():
+    """Get progress estimation statistics and historical data insights."""
+    try:
+        stats = progress_estimator.get_statistics()
+        return jsonify({
+            "status": "success",
+            "statistics": stats,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error("Failed to get estimation statistics", error=str(e))
+        return jsonify({"error": "Failed to retrieve estimation statistics"}), 500
+
+
+@app.route("/api/error-recovery/statistics", methods=["GET"])
+@track_http_request
+def error_recovery_statistics():
+    """Get error recovery statistics and insights."""
+    try:
+        stats = error_recovery_service.get_error_statistics()
+        return jsonify({
+            "status": "success",
+            "statistics": stats,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error("Failed to get error recovery statistics", error=str(e))
+        return jsonify({"error": "Failed to retrieve error recovery statistics"}), 500
+
+
+@app.route("/api/text/detect-language", methods=["POST"])
+@track_http_request
+def detect_language():
+    """Detect programming language from text content."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        text = data.get("text", "")
+        filename = data.get("filename")
+
+        if not text.strip():
+            return jsonify({"error": "Text content is required"}), 400
+
+        # Detect language
+        language_info = text_processor.detect_language(text, filename)
+
+        return jsonify({
+            "status": "success",
+            "language": {
+                "name": language_info.name,
+                "aliases": language_info.aliases,
+                "file_extensions": language_info.file_extensions,
+                "confidence": language_info.confidence,
+                "detection_method": language_info.detection_method
+            },
+            "supported_extensions": text_processor.get_supported_extensions(),
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error("Language detection failed", error=str(e))
+        return jsonify({"error": "Failed to detect language"}), 500
+
+
+@app.route("/api/text/process", methods=["POST"])
+@track_http_request
+def process_text():
+    """Process text with syntax highlighting and language detection."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        text = data.get("text", "")
+        filename = data.get("filename")
+        typing_speed = data.get("typing_speed", 150)
+
+        if not text.strip():
+            return jsonify({"error": "Text content is required"}), 400
+
+        # Process text
+        processed_text = text_processor.process_text(text, filename, typing_speed)
+
+        # Prepare response with limited token information for performance
+        tokens_preview = processed_text.tokens[:100]  # First 100 tokens for preview
+
+        return jsonify({
+            "status": "success",
+            "language": {
+                "name": processed_text.language_info.name,
+                "aliases": processed_text.language_info.aliases,
+                "confidence": processed_text.language_info.confidence,
+                "detection_method": processed_text.language_info.detection_method
+            },
+            "statistics": {
+                "total_characters": processed_text.total_characters,
+                "total_lines": len(processed_text.lines),
+                "total_tokens": len(processed_text.tokens),
+                "estimated_typing_time": processed_text.estimated_typing_time
+            },
+            "tokens_preview": [
+                {
+                    "text": token.text,
+                    "type": token.token_type,
+                    "color": token.color
+                } for token in tokens_preview
+            ],
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error("Text processing failed", error=str(e))
+        return jsonify({"error": "Failed to process text"}), 500
+
+
 @app.route("/api/generate/typing", methods=["POST"])
 @rate_limit_decorator
 @track_http_request
@@ -199,6 +330,8 @@ def generate_typing_effect():
                 data['duration'] = int(data['duration'])
             if 'font_size' in data:
                 data['font_size'] = int(data['font_size'])
+            if 'typing_speed' in data:
+                data['typing_speed'] = int(data['typing_speed'])
         else:
             data = request.get_json() or {}
 
@@ -211,19 +344,26 @@ def generate_typing_effect():
         font_family = data.get("font_family", "jetbrains")
         font_size = data.get("font_size", config.TYPING_FONT_SIZE)
         text_color = data.get("text_color", "#00FF00")  # Default green
+        typing_speed = data.get("typing_speed", config.TYPING_WPM)  # WPM
         custom_text = data.get("custom_text", None)
 
         # Basic validation
         if duration < 10 or duration > 600:
             return jsonify({"error": "Duration must be between 10 and 600 seconds"}), 400
 
-        if output_format not in ["mp4", "png"]:
-            return jsonify({"error": "Output format must be 'mp4' or 'png'"}), 400
+        if output_format not in ["mp4", "png", "gif"]:
+            return jsonify({"error": "Output format must be 'mp4', 'png', or 'gif'"}), 400
 
-        # Validate font size
-        if not (config.TYPING_FONT_SIZE_MIN <= font_size <= config.TYPING_FONT_SIZE_MAX):
+        # Validate font size (now in points, 8-150pt)
+        if not (8 <= font_size <= 150):
             return jsonify({
-                "error": f"Font size must be between {config.TYPING_FONT_SIZE_MIN} and {config.TYPING_FONT_SIZE_MAX}"
+                "error": "Font size must be between 8 and 150 points"
+            }), 400
+
+        # Validate typing speed
+        if not (50 <= typing_speed <= 300):
+            return jsonify({
+                "error": "Typing speed must be between 50 and 300 WPM"
             }), 400
 
         # Validate font family
@@ -267,7 +407,32 @@ def generate_typing_effect():
 
         # Generate job ID
         job_id = generate_job_id("typing")
-        
+
+        # Get intelligent time estimate
+        estimation_parameters = {
+            "duration": duration,
+            "source_file": source_file,
+            "output_format": output_format,
+            "font_family": font_family,
+            "font_size": font_size,
+            "text_color": text_color,
+            "typing_speed": typing_speed,
+            "custom_text": custom_text
+        }
+
+        try:
+            estimation_result = progress_estimator.estimate_generation_time("typing", estimation_parameters)
+            estimated_seconds = int(estimation_result.estimated_seconds)
+            estimated_duration = f"{estimated_seconds}s"
+            confidence_level = estimation_result.confidence_level
+            based_on_samples = estimation_result.based_on_samples
+        except Exception as e:
+            logger.warning("Failed to get intelligent estimate, using fallback", error=str(e))
+            estimated_seconds = duration * 2  # Fallback to simple estimate
+            estimated_duration = f"{estimated_seconds}s"
+            confidence_level = 0.3
+            based_on_samples = 0
+
         # Create job entry
         job_data = {
             "job_id": job_id,
@@ -282,10 +447,13 @@ def generate_typing_effect():
                 "font_family": font_family,
                 "font_size": font_size,
                 "text_color": text_color,
+                "typing_speed": typing_speed,
                 "custom_text": custom_text,
                 "uploaded_file_path": uploaded_file_path
             },
-            "estimated_duration": f"{duration * 2}s"  # Rough estimate
+            "estimated_duration": estimated_duration,
+            "estimation_confidence": confidence_level,
+            "estimation_samples": based_on_samples
         }
         
         with job_lock:
@@ -303,13 +471,36 @@ def generate_typing_effect():
                     font_family=font_family,
                     font_size=font_size,
                     text_color=text_color,
+                    typing_speed=typing_speed,
                     custom_text=custom_text,
                     uploaded_file_path=uploaded_file_path,
                     progress_callback=lambda p: update_job_progress(job_id, p)
                 )
             except Exception as e:
                 logger.error("Video generation failed", job_id=job_id, error=str(e))
-                update_job_status(job_id, JobStatus.FAILED, error=str(e))
+
+                # Analyze error for recovery recommendations
+                try:
+                    from .error_recovery import ErrorContext
+                    context = ErrorContext(
+                        operation="video_generation",
+                        job_id=job_id,
+                        parameters=job_data.get("parameters", {}),
+                        attempt_number=1,
+                        timestamp=time.time(),
+                        duration_before_error=0
+                    )
+
+                    error_report = error_recovery_service.analyze_error(e, context)
+                    update_job_status(job_id, JobStatus.FAILED,
+                                    error=error_report.user_message,
+                                    error_id=error_report.error_id,
+                                    error_category=error_report.category.value,
+                                    technical_details=error_report.technical_details)
+                except Exception as recovery_error:
+                    logger.warning("Failed to analyze error for recovery",
+                                 job_id=job_id, error=str(recovery_error))
+                    update_job_status(job_id, JobStatus.FAILED, error=str(e))
             finally:
                 # Clean up uploaded file if it exists
                 if uploaded_file_path and Path(uploaded_file_path).exists():
@@ -329,7 +520,9 @@ def generate_typing_effect():
         return jsonify({
             "job_id": job_id,
             "status": JobStatus.QUEUED.value,
-            "estimated_duration": job_data["estimated_duration"]
+            "estimated_duration": job_data["estimated_duration"],
+            "estimation_confidence": job_data["estimation_confidence"],
+            "estimation_samples": job_data["estimation_samples"]
         }), 202
         
     except Exception as e:
@@ -351,7 +544,7 @@ def get_job_status(job_id: str):
     if job_data.get("status") == JobStatus.COMPLETED.value and job_data.get("output_file"):
         output_file = Path(job_data["output_file"]).name
         job_data["download_url"] = f"/api/download/{output_file}"
-        
+
         # Add file size if available
         try:
             file_path = config.OUTPUT_DIR / output_file
@@ -360,7 +553,21 @@ def get_job_status(job_id: str):
                 job_data["file_size"] = f"{size_mb:.1f}MB"
         except Exception:
             pass
-    
+
+    # Add error recovery information if job failed
+    if job_data.get("status") == JobStatus.FAILED.value and job_data.get("error_id"):
+        try:
+            recovery_action = error_recovery_service.get_recovery_recommendation(job_data["error_id"])
+            if recovery_action:
+                job_data["recovery_suggestion"] = {
+                    "strategy": recovery_action.strategy.value,
+                    "description": recovery_action.description,
+                    "confidence": recovery_action.confidence,
+                    "estimated_success_rate": recovery_action.estimated_success_rate
+                }
+        except Exception as e:
+            logger.warning("Failed to get recovery recommendation", job_id=job_id, error=str(e))
+
     return jsonify(job_data)
 
 
@@ -395,6 +602,371 @@ def download_file(filename: str):
     except Exception as e:
         logger.error("Download failed", filename=filename, error=str(e))
         return jsonify({"error": "Download failed"}), 500
+
+
+# ============================================================================
+# Batch Processing Endpoints
+# ============================================================================
+
+@app.route("/api/batch", methods=["POST"])
+@track_http_request
+def create_batch():
+    """Create a new batch processing job."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        name = data.get("name", "").strip()
+        description = data.get("description", "").strip()
+        items = data.get("items", [])
+        priority = data.get("priority", "normal")
+        auto_retry_failed = data.get("auto_retry_failed", True)
+        max_retries = data.get("max_retries", 3)
+        concurrent_limit = data.get("concurrent_limit", 2)
+
+        # Validation
+        if not name:
+            return jsonify({"error": "Batch name is required"}), 400
+
+        if not items or not isinstance(items, list):
+            return jsonify({"error": "Batch items are required"}), 400
+
+        if len(items) > 50:  # Reasonable limit
+            return jsonify({"error": "Maximum 50 items per batch"}), 400
+
+        # Validate priority
+        try:
+            priority_enum = JobPriority(priority)
+        except ValueError:
+            return jsonify({"error": f"Invalid priority: {priority}"}), 400
+
+        # Validate each item
+        for i, item in enumerate(items):
+            if not isinstance(item, dict):
+                return jsonify({"error": f"Item {i+1} must be an object"}), 400
+
+            if "effect_type" not in item:
+                return jsonify({"error": f"Item {i+1} missing effect_type"}), 400
+
+            if "parameters" not in item:
+                return jsonify({"error": f"Item {i+1} missing parameters"}), 400
+
+        # Create batch
+        batch_id = batch_processor.create_batch(
+            name=name,
+            description=description,
+            items=items,
+            priority=priority_enum,
+            auto_retry_failed=auto_retry_failed,
+            max_retries=max_retries,
+            concurrent_limit=concurrent_limit
+        )
+
+        logger.info("Batch created", batch_id=batch_id, name=name, items_count=len(items))
+
+        return jsonify({
+            "batch_id": batch_id,
+            "status": "created",
+            "total_items": len(items)
+        }), 201
+
+    except Exception as e:
+        logger.error("Failed to create batch", error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/batch/<batch_id>/start", methods=["POST"])
+@track_http_request
+def start_batch(batch_id: str):
+    """Start processing a batch."""
+    try:
+        success = batch_processor.start_batch(batch_id)
+        if success:
+            return jsonify({"status": "started"})
+        else:
+            return jsonify({"error": "Failed to start batch"}), 400
+    except Exception as e:
+        logger.error("Failed to start batch", batch_id=batch_id, error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/batch/<batch_id>/pause", methods=["POST"])
+@track_http_request
+def pause_batch(batch_id: str):
+    """Pause batch processing."""
+    try:
+        success = batch_processor.pause_batch(batch_id)
+        if success:
+            return jsonify({"status": "paused"})
+        else:
+            return jsonify({"error": "Failed to pause batch"}), 400
+    except Exception as e:
+        logger.error("Failed to pause batch", batch_id=batch_id, error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/batch/<batch_id>/resume", methods=["POST"])
+@track_http_request
+def resume_batch(batch_id: str):
+    """Resume paused batch processing."""
+    try:
+        success = batch_processor.resume_batch(batch_id)
+        if success:
+            return jsonify({"status": "resumed"})
+        else:
+            return jsonify({"error": "Failed to resume batch"}), 400
+    except Exception as e:
+        logger.error("Failed to resume batch", batch_id=batch_id, error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/batch/<batch_id>/cancel", methods=["POST"])
+@track_http_request
+def cancel_batch(batch_id: str):
+    """Cancel batch processing."""
+    try:
+        success = batch_processor.cancel_batch(batch_id)
+        if success:
+            return jsonify({"status": "cancelled"})
+        else:
+            return jsonify({"error": "Failed to cancel batch"}), 400
+    except Exception as e:
+        logger.error("Failed to cancel batch", batch_id=batch_id, error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/batch/<batch_id>", methods=["GET"])
+@track_http_request
+def get_batch_status(batch_id: str):
+    """Get batch status and progress."""
+    try:
+        batch_data = batch_processor.get_batch_status(batch_id)
+        if batch_data:
+            return jsonify(batch_data)
+        else:
+            return jsonify({"error": "Batch not found"}), 404
+    except Exception as e:
+        logger.error("Failed to get batch status", batch_id=batch_id, error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/batch", methods=["GET"])
+@track_http_request
+def list_batches():
+    """List all batches with optional status filter."""
+    try:
+        status_filter = request.args.get("status")
+        batches = batch_processor.list_batches(status_filter)
+        return jsonify({"batches": batches})
+    except Exception as e:
+        logger.error("Failed to list batches", error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/batch/<batch_id>", methods=["DELETE"])
+@track_http_request
+def delete_batch(batch_id: str):
+    """Delete a batch."""
+    try:
+        success = batch_processor.delete_batch(batch_id)
+        if success:
+            return jsonify({"status": "deleted"})
+        else:
+            return jsonify({"error": "Failed to delete batch or batch is still active"}), 400
+    except Exception as e:
+        logger.error("Failed to delete batch", batch_id=batch_id, error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ============================================================================
+# WebSocket and Real-time Preview Endpoints
+# ============================================================================
+
+@app.route("/api/websocket/status", methods=["GET"])
+@track_http_request
+def get_websocket_status():
+    """Get WebSocket server status."""
+    try:
+        status = websocket_manager.get_status()
+        return jsonify(status)
+    except Exception as e:
+        logger.error("Failed to get WebSocket status", error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ============================================================================
+# Collaboration and Sharing Endpoints
+# ============================================================================
+
+@app.route("/api/collaboration/share", methods=["POST"])
+@track_http_request
+def create_shareable_link():
+    """Create a shareable link for configuration."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        title = data.get("title", "").strip()
+        description = data.get("description", "").strip()
+        configuration = data.get("configuration", {})
+        expires_hours = data.get("expires_hours")
+        max_access_count = data.get("max_access_count")
+        password = data.get("password")
+
+        # Validation
+        if not title:
+            return jsonify({"error": "Title is required"}), 400
+
+        if not configuration:
+            return jsonify({"error": "Configuration is required"}), 400
+
+        # Create shareable link
+        share_url = collaboration_manager.create_shareable_link(
+            title=title,
+            description=description,
+            configuration=configuration,
+            created_by=request.remote_addr,  # Use IP as user identifier for now
+            expires_hours=expires_hours,
+            max_access_count=max_access_count,
+            password=password
+        )
+
+        logger.info("Shareable link created", title=title, created_by=request.remote_addr)
+
+        return jsonify({
+            "share_url": share_url,
+            "status": "created"
+        }), 201
+
+    except Exception as e:
+        logger.error("Failed to create shareable link", error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/collaboration/links", methods=["GET"])
+@track_http_request
+def list_shareable_links():
+    """List shareable links for the current user."""
+    try:
+        created_by = request.remote_addr  # Use IP as user identifier for now
+        links = collaboration_manager.list_shareable_links(created_by=created_by)
+        return jsonify({"links": links})
+    except Exception as e:
+        logger.error("Failed to list shareable links", error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/share/<link_id>", methods=["GET"])
+@track_http_request
+def access_shareable_link(link_id: str):
+    """Access a shareable link and return the configuration."""
+    try:
+        password = request.args.get("password")
+
+        result = collaboration_manager.access_shareable_link(link_id, password)
+
+        if not result:
+            return render_template("error.html",
+                                 error_title="Link Not Found",
+                                 error_message="The shareable link you're looking for doesn't exist or has expired."), 404
+
+        if "error" in result:
+            if result["error"] == "password_required":
+                return render_template("share_password.html", link_id=link_id)
+            elif result["error"] == "invalid_password":
+                return render_template("share_password.html", link_id=link_id,
+                                     error="Invalid password. Please try again.")
+
+        # Render the main page with the shared configuration
+        return render_template("index.html", shared_config=result["configuration"])
+
+    except Exception as e:
+        logger.error("Failed to access shareable link", link_id=link_id, error=str(e))
+        return render_template("error.html",
+                             error_title="Error",
+                             error_message="An error occurred while accessing the shared link."), 500
+
+
+@app.route("/api/collaboration/collections", methods=["POST"])
+@track_http_request
+def create_preset_collection():
+    """Create a new preset collection."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        name = data.get("name", "").strip()
+        description = data.get("description", "").strip()
+        presets = data.get("presets", [])
+        is_public = data.get("is_public", False)
+        tags = data.get("tags", [])
+
+        # Validation
+        if not name:
+            return jsonify({"error": "Collection name is required"}), 400
+
+        if not presets or not isinstance(presets, list):
+            return jsonify({"error": "Presets are required"}), 400
+
+        # Create preset collection
+        collection_id = collaboration_manager.create_preset_collection(
+            name=name,
+            description=description,
+            presets=presets,
+            created_by=request.remote_addr,
+            is_public=is_public,
+            tags=tags
+        )
+
+        logger.info("Preset collection created", collection_id=collection_id,
+                   name=name, created_by=request.remote_addr)
+
+        return jsonify({
+            "collection_id": collection_id,
+            "status": "created"
+        }), 201
+
+    except Exception as e:
+        logger.error("Failed to create preset collection", error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/collaboration/collections", methods=["GET"])
+@track_http_request
+def list_preset_collections():
+    """List preset collections."""
+    try:
+        created_by = request.args.get("created_by")
+        include_public = request.args.get("include_public", "true").lower() == "true"
+
+        if not created_by:
+            created_by = request.remote_addr
+
+        collections = collaboration_manager.list_preset_collections(
+            created_by=created_by,
+            include_public=include_public
+        )
+
+        return jsonify({"collections": collections})
+
+    except Exception as e:
+        logger.error("Failed to list preset collections", error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route("/api/collaboration/stats", methods=["GET"])
+@track_http_request
+def get_collaboration_stats():
+    """Get collaboration system statistics."""
+    try:
+        stats = collaboration_manager.get_collaboration_stats()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error("Failed to get collaboration stats", error=str(e))
+        return jsonify({"error": "Internal server error"}), 500
 
 
 # ============================================================================
@@ -518,6 +1090,8 @@ def generate_preview():
             data = request.form.to_dict()
             if 'font_size' in data:
                 data['font_size'] = int(data['font_size'])
+            if 'typing_speed' in data:
+                data['typing_speed'] = int(data['typing_speed'])
         else:
             data = request.get_json() or {}
 
@@ -671,6 +1245,18 @@ if __name__ == "__main__":
     cleanup_thread = threading.Thread(target=lambda: None)  # Placeholder for periodic cleanup
     cleanup_thread.daemon = True
     cleanup_thread.start()
+
+    # Start WebSocket server for real-time features
+    websocket_started = start_websocket_server_thread(
+        host=config.API_HOST,
+        port=config.API_PORT + 1  # Use next port for WebSocket
+    )
+
+    if websocket_started:
+        logger.info("WebSocket server started for real-time features",
+                   ws_port=config.API_PORT + 1)
+    else:
+        logger.warning("WebSocket server not started - real-time features disabled")
 
     logger.info(
         "Starting Green-Code FX API server",
