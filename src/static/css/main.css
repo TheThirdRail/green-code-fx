@@ -4,12 +4,14 @@
     /* Dark Theme (Default) */
     --primary-green: #00FF00;
     --dark-green: #00CC00;
+    --light-green: #66FF66;  /* New: Better visibility for secondary text */
     --bg-dark: #1a1a1a;
     --bg-darker: #0d1117;
     --border-color: #30363d;
-    --text-muted: #b1bac4;  /* Improved contrast from #8b949e */
+    --text-muted: #66FF66;  /* Changed: Matrix green variant for better visibility */
     --text-primary: #ffffff;
-    --text-secondary: #e6e6e6;
+    --text-secondary: #00FF00;  /* Changed: Use matrix green for better visibility */
+    --text-help: #99FF99;  /* New: Lighter green for help text */
     --card-bg: #1a1a1a;
     --navbar-bg: #0d1117;
     --footer-bg: #0d1117;
@@ -18,13 +20,15 @@
 /* Light Theme */
 [data-theme="light"] {
     --primary-green: #00AA00;
-    --dark-green: #008800;
+    --dark-green: #006600;  /* Darker for better contrast */
+    --light-green: #008800;  /* Darker for accessibility */
     --bg-dark: #ffffff;
     --bg-darker: #f8f9fa;
     --border-color: #dee2e6;
-    --text-muted: #495057;  /* Improved contrast from #6c757d */
+    --text-muted: #006600;  /* Darker green for better contrast */
     --text-primary: #212529;
-    --text-secondary: #495057;
+    --text-secondary: #006600;  /* Darker green for accessibility */
+    --text-help: #005500;  /* Much darker green for accessibility */
     --card-bg: #ffffff;
     --navbar-bg: #f8f9fa;
     --footer-bg: #f8f9fa;
@@ -57,6 +61,23 @@ body {
 
 .text-success {
     color: var(--primary-green) !important;
+}
+
+/* Enhanced text visibility classes */
+.text-matrix-light {
+    color: var(--light-green) !important;
+}
+
+.text-help {
+    color: var(--text-help) !important;
+}
+
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+.text-secondary {
+    color: var(--text-secondary) !important;
 }
 
 .btn-success {
@@ -95,6 +116,20 @@ body {
     background-color: var(--bg-darker) !important;
     border-color: var(--border-color) !important;
     color: var(--text-primary) !important;
+}
+
+/* Form Labels and Help Text */
+.form-label {
+    color: var(--text-secondary) !important;
+    font-weight: 500;
+}
+
+.form-text {
+    color: var(--text-help) !important;
+}
+
+.form-text.text-muted {
+    color: var(--text-help) !important;
 }
 
 .form-control:focus {
@@ -236,7 +271,7 @@ body {
 
 /* Status Indicators */
 .status-idle {
-    color: var(--text-muted);
+    color: var(--text-help);  /* Changed: Better visibility for idle status */
 }
 
 .status-processing {
@@ -248,7 +283,7 @@ body {
 }
 
 .status-error {
-    color: #dc3545;
+    color: #FF6B6B;  /* Changed: Softer red that works better with green theme */
 }
 
 /* Cards */
@@ -263,10 +298,11 @@ body {
 /* Navigation */
 .navbar-brand {
     font-size: 1.5rem;
+    color: var(--primary-green) !important;  /* Added: Matrix green for brand */
 }
 
 .navbar-nav .nav-link {
-    color: var(--text-muted) !important;
+    color: var(--text-secondary) !important;  /* Changed: Better visibility */
 }
 
 .navbar-nav .nav-link:hover {
@@ -277,7 +313,7 @@ body {
 .theme-toggle {
     background: none;
     border: 1px solid var(--border-color);
-    color: var(--text-muted);
+    color: var(--text-secondary);  /* Changed: Better visibility */
     border-radius: 0.375rem;
     padding: 0.375rem 0.75rem;
     cursor: pointer;
@@ -382,7 +418,7 @@ footer {
 .mobile-bottom-sheet-handle {
     width: 40px;
     height: 4px;
-    background-color: var(--text-muted);
+    background-color: var(--text-secondary);  /* Changed: Better visibility */
     border-radius: 2px;
     margin: 0 auto 16px;
     cursor: pointer;

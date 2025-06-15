@@ -202,7 +202,7 @@ const FormManager = {
             } else if (percentage > 75) {
                 counter.className = 'text-warning';
             } else {
-                counter.className = 'text-muted';
+                counter.className = 'text-help';
             }
         }
     },
@@ -312,7 +312,7 @@ const FormManager = {
         if (success) success.classList.add('d-none');
         if (languageDetection) {
             languageDetection.innerHTML = `
-                <small class="text-muted">
+                <small class="text-help">
                     <i class="fas fa-search fa-spin me-1"></i>
                     Detecting language...
                 </small>
@@ -364,7 +364,7 @@ const FormManager = {
         previewArea.innerHTML = `
             <div class="preview-loading text-center">
                 <div class="loading-spinner mb-2"></div>
-                <p class="text-muted">Generating preview...</p>
+                <p class="text-help">Generating preview...</p>
             </div>
         `;
 
@@ -393,7 +393,7 @@ const FormManager = {
             previewArea.innerHTML = `
                 <div class="preview-error text-center">
                     <i class="fas fa-exclamation-triangle text-warning fa-2x mb-2"></i>
-                    <p class="text-muted">Failed to generate preview</p>
+                    <p class="text-help">Failed to generate preview</p>
                 </div>
             `;
         }
@@ -823,7 +823,7 @@ class Snake {
             if (feedbackElement && feedbackElement.classList.contains('text-danger')) {
                 feedbackElement.textContent = feedbackElement.dataset.originalText || '';
                 feedbackElement.classList.remove('text-danger');
-                feedbackElement.classList.add('text-muted');
+                feedbackElement.classList.add('text-help');
             }
         } else {
             input.classList.remove('is-valid');
@@ -833,7 +833,7 @@ class Snake {
                     feedbackElement.dataset.originalText = feedbackElement.textContent;
                 }
                 feedbackElement.textContent = message;
-                feedbackElement.classList.remove('text-muted');
+                feedbackElement.classList.remove('text-help');
                 feedbackElement.classList.add('text-danger');
             }
         }
@@ -994,7 +994,7 @@ class Snake {
             }
         } else {
             if (statusArea) {
-                statusArea.innerHTML = '<div class="status-idle"><i class="fas fa-clock text-muted me-2"></i><span class="text-muted">Ready to generate</span></div>';
+                statusArea.innerHTML = '<div class="status-idle"><i class="fas fa-clock text-help me-2"></i><span class="text-help">Ready to generate</span></div>';
             }
             if (progressContainer) {
                 progressContainer.style.display = 'none';
@@ -1112,7 +1112,7 @@ class Snake {
                 GreenCodeFX.Utils.showToast(`Generation failed: ${jobData.error || 'Unknown error'}`, 'error');
                 break;
             default:
-                statusHTML = '<div class="status-idle"><i class="fas fa-question text-muted me-2"></i><span class="text-muted">Unknown status</span></div>';
+                statusHTML = '<div class="status-idle"><i class="fas fa-question text-help me-2"></i><span class="text-help">Unknown status</span></div>';
                 progressTextContent = 'Status unknown';
         }
 
@@ -1275,7 +1275,7 @@ class Snake {
                 const categoryInfo = this.getErrorCategoryInfo(jobData.error_category);
                 recoveryHTML += `
                     <div class="error-category mt-2">
-                        <small class="text-muted">
+                        <small class="text-help">
                             <i class="fas fa-tag me-1"></i>
                             Error Type: <span class="badge bg-secondary">${categoryInfo.name}</span>
                         </small>
@@ -1297,10 +1297,10 @@ class Snake {
                                 </h6>
                                 <p class="card-text small mb-1">${suggestion.description}</p>
                                 <div class="d-flex justify-content-between">
-                                    <small class="text-muted">
+                                    <small class="text-help">
                                         Confidence: ${confidencePercent}%
                                     </small>
-                                    <small class="text-muted">
+                                    <small class="text-help">
                                         Success Rate: ${successPercent}%
                                     </small>
                                 </div>

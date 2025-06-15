@@ -795,7 +795,7 @@ const CacheManager = {
             cacheIndicator.innerHTML = `
                 <span class="nav-link" id="cacheStatus" title="Cache Status">
                     <i class="fas fa-database me-1"></i>
-                    <small id="cacheIndicator" class="text-muted">Cache</small>
+                    <small id="cacheIndicator" class="text-help">Cache</small>
                 </span>
             `;
             statusArea.appendChild(cacheIndicator);
@@ -807,7 +807,7 @@ const CacheManager = {
         if (indicator) {
             const cacheStats = this.getCacheStats();
             indicator.textContent = `Cache (${cacheStats.settings}S/${cacheStats.previews}P)`;
-            indicator.className = cacheStats.total > 0 ? 'text-success' : 'text-muted';
+            indicator.className = cacheStats.total > 0 ? 'text-success' : 'text-help';
         }
     },
 
@@ -1044,7 +1044,7 @@ const ProgressEstimationManager = {
             indicator.id = 'estimationIndicator';
             indicator.className = 'mt-2 text-center';
             indicator.innerHTML = `
-                <small class="text-muted">
+                <small class="text-help">
                     <i class="fas fa-brain me-1"></i>
                     <span id="estimationQuality">Smart estimation active</span>
                 </small>
