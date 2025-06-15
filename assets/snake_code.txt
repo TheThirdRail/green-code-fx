@@ -1,0 +1,150 @@
+import pygame
+import random
+import sys
+
+# Initialize Pygame
+pygame.init()
+
+# Constants
+WINDOW_WIDTH = 800
+WINDOW_HEIGHT = 600
+GRID_SIZE = 20
+GRID_WIDTH = WINDOW_WIDTH // GRID_SIZE
+GRID_HEIGHT = WINDOW_HEIGHT // GRID_SIZE
+
+# Colors
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+WHITE = (255, 255, 255)
+
+# Directions
+UP = (0, -1)
+DOWN = (0, 1)
+LEFT = (-1, 0)
+RIGHT = (1, 0)
+
+class Snake:
+    def __init__(self):
+        self.positions = [(GRID_WIDTH // 2, GRID_HEIGHT // 2)]
+        self.direction = random.choice([UP, DOWN, LEFT, RIGHT])
+        self.grow = False
+    
+    def move(self):
+        head_x, head_y = self.positions[0]
+        new_head = (head_x + self.direction[0], head_y + self.direction[1])
+        
+        # Check boundaries
+        if (new_head[0] < 0 or new_head[0] >= GRID_WIDTH or
+            new_head[1] < 0 or new_head[1] >= GRID_HEIGHT):
+            return False
+        
+        # Check self collision
+        if new_head in self.positions:
+            return False
+        
+        self.positions.insert(0, new_head)
+        
+        if not self.grow:
+            self.positions.pop()
+        else:
+            self.grow = False
+        
+        return True
+    
+    def change_direction(self, direction):
+        if (direction[0] * -1, direction[1] * -1) != self.direction:
+            self.direction = direction
+    
+    def grow_snake(self):
+        self.grow = True
+    
+    def draw(self, surface):
+        for position in self.positions:
+            rect = pygame.Rect(position[0] * GRID_SIZE, position[1] * GRID_SIZE,
+                             GRID_SIZE, GRID_SIZE)
+            pygame.draw.rect(surface, GREEN, rect)
+            pygame.draw.rect(surface, WHITE, rect, 1)
+
+class Food:
+    def __init__(self):
+        self.position = (0, 0)
+        self.randomize_position()
+    
+    def randomize_position(self):
+        self.position = (random.randint(0, GRID_WIDTH - 1),
+                        random.randint(0, GRID_HEIGHT - 1))
+    
+    def draw(self, surface):
+        rect = pygame.Rect(self.position[0] * GRID_SIZE, self.position[1] * GRID_SIZE,
+                          GRID_SIZE, GRID_SIZE)
+        pygame.draw.rect(surface, RED, rect)
+
+class Game:
+    def __init__(self):
+        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        pygame.display.set_caption("Snake Game")
+        self.clock = pygame.time.Clock()
+        self.snake = Snake()
+        self.food = Food()
+        self.score = 0
+        self.font = pygame.font.Font(None, 36)
+    
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    self.snake.change_direction(UP)
+                elif event.key == pygame.K_DOWN:
+                    self.snake.change_direction(DOWN)
+                elif event.key == pygame.K_LEFT:
+                    self.snake.change_direction(LEFT)
+                elif event.key == pygame.K_RIGHT:
+                    self.snake.change_direction(RIGHT)
+        return True
+    
+    def update(self):
+        if not self.snake.move():
+            return False
+        
+        # Check food collision
+        if self.snake.positions[0] == self.food.position:
+            self.snake.grow_snake()
+            self.food.randomize_position()
+            self.score += 10
+            
+            # Ensure food doesn't spawn on snake
+            while self.food.position in self.snake.positions:
+                self.food.randomize_position()
+        
+        return True
+    
+    def draw(self):
+        self.screen.fill(BLACK)
+        self.snake.draw(self.screen)
+        self.food.draw(self.screen)
+        
+        # Draw score
+        score_text = self.font.render(f"Score: {self.score}", True, WHITE)
+        self.screen.blit(score_text, (10, 10))
+        
+        pygame.display.flip()
+    
+    def run(self):
+        running = True
+        while running:
+            running = self.handle_events()
+            if running:
+                running = self.update()
+            
+            self.draw()
+            self.clock.tick(10)  # 10 FPS for snake game
+        
+        pygame.quit()
+        sys.exit()
+
+if __name__ == "__main__":
+    game = Game()
+    game.run()

@@ -1,0 +1,429 @@
+# Green-Code FX Projects – Docker Engineering Guidelines
+
+These guidelines govern the **containerized video effects generation system** for two chroma-key animation deliverables: (1) *Typing Code Effect* and (2) *Matrix Rain Effect*. All contributors **must** follow this document to ensure consistent Docker-based deployment and maintainability.
+
+---
+
+## 1. Deliverables
+
+| ID        | Script            | Container Port | Target FPS | Duration                | Output                                 |
+|-----------|-------------------|----------------|------------|-------------------------|----------------------------------------|
+| **TYPING** | `typing_effect.py` | 8082          | 60 fps     | ≥ 90 s loop or long take | 4K MP4 (H.264 lossless or CQP ≤ 20)   |
+| **RAIN**   | `matrix_rain.py`   | 8082          | 60 fps     | seamless 15 s loop      | 4K MP4 (H.264 lossless) or PNG sequence |
+
+---
+
+## 2. Docker Architecture
+
+### 2.1 Container Stack
+
+* **Base Image**: `python:3.12-slim-bullseye`
+* **Core Services**: 
+  - **video-fx-generator**: Python/Pygame headless renderer
+  - **web-api**: Flask API server for triggering generation and serving videos
+* **Orchestration**: Docker Compose v2
+* **Port Mapping**: Container 8082 → localhost:8082
+
+### 2.2 Environment Variables
+
+```bash
+# Core Configuration
+SDL_VIDEODRIVER=dummy          # Headless Pygame rendering
+PYTHONUNBUFFERED=1            # Real-time logging
+FLASK_ENV=production          # Production Flask mode
+
+# Video Generation
+VIDEO_OUTPUT_DIR=/app/output   # Container video storage path
+ASSETS_DIR=/app/assets        # Container assets path
+TEMP_DIR=/app/temp           # Temporary frame storage
+
+# API Configuration  
+API_HOST=0.0.0.0             # Bind to all interfaces
+API_PORT=8082                # Internal container port
+MAX_CONCURRENT_JOBS=2        # Limit simultaneous video generation
+```
+
+### 2.3 Volume Strategy
+
+```yaml
+volumes:
+  - ./output:/app/output:rw     # Generated videos (persistent)
+  - ./assets:/app/assets:ro     # Fonts and source files (read-only)
+  - ./temp:/app/temp:rw         # Temporary frames (ephemeral)
+```
+
+---
+
+## 3. Canonical Tech Stack
+
+### 3.1 Core Dependencies
+
+* **Python 3.12** (CPython only)
+* **Pygame ≥ 2.5** for headless rendering
+* **Flask ≥ 2.3** for web API
+* **FFmpeg 6.x** for video assembly
+* **SDL2** with dummy video driver
+
+### 3.2 Development Environment
+
+```bash
+# Local development with Docker
+docker-compose up --build -d
+docker-compose logs -f video-fx-generator
+
+# Development without Docker (optional)
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+```
+
+### 3.3 Container Build Process
+
+```dockerfile
+# Multi-stage build for optimization
+FROM python:3.12-slim-bullseye as base
+FROM base as dependencies  
+FROM dependencies as runtime
+```
+
+---
+
+## 4. Project Structure
+
+```
+green-code-fx/
+├── docker-compose.yml           # Service orchestration
+├── Dockerfile                   # Container definition
+├── requirements.txt             # Python dependencies
+├── .dockerignore               # Docker build exclusions
+├── src/
+│   ├── typing_effect.py        # Typing animation generator
+│   ├── matrix_rain.py          # Matrix rain generator  
+│   ├── web_api.py              # Flask API server
+│   ├── video_generator.py      # Common video generation utilities
+│   └── config.py               # Configuration management
+├── assets/
+│   ├── fonts/
+│   │   ├── JetBrainsMono-Regular.ttf
+│   │   └── matrix-katakana.ttf
+│   ├── snake_code.txt          # Source code for typing effect
+│   └── LICENSES                # Font license information
+├── output/                     # Generated videos (volume mount)
+├── temp/                       # Temporary frames (volume mount)
+├── tests/
+│   ├── test_typing_effect.py
+│   ├── test_matrix_rain.py
+│   └── test_api.py
+├── scripts/
+│   ├── build.sh               # Container build script
+│   ├── run.sh                 # Container run script
+│   └── health-check.sh        # Container health verification
+├── docs/
+│   ├── API.md                 # API documentation
+│   └── DEPLOYMENT.md          # Deployment guide
+├── .github/
+│   └── workflows/
+│       └── docker-ci.yml      # Docker CI/CD pipeline
+├── README.md
+└── CHANGELOG.md
+```
+
+---
+
+## 5. API Endpoints
+
+### 5.1 Video Generation
+
+```http
+POST /api/generate/typing
+Content-Type: application/json
+
+{
+  "duration": 90,
+  "source_file": "snake_code.txt",
+  "output_format": "mp4"
+}
+
+Response: 202 Accepted
+{
+  "job_id": "typing_20240614_123456",
+  "status": "queued",
+  "estimated_duration": "45s"
+}
+```
+
+```http
+POST /api/generate/matrix
+Content-Type: application/json
+
+{
+  "duration": 15,
+  "loop_seamless": true,
+  "output_format": "mp4"
+}
+
+Response: 202 Accepted  
+{
+  "job_id": "matrix_20240614_123457",
+  "status": "queued",
+  "estimated_duration": "30s"
+}
+```
+
+### 5.2 Job Status & Results
+
+```http
+GET /api/jobs/{job_id}
+
+Response: 200 OK
+{
+  "job_id": "typing_20240614_123456",
+  "status": "completed",
+  "progress": 100,
+  "output_file": "/api/download/typing_20240614_123456.mp4",
+  "file_size": "245MB",
+  "duration": "90s"
+}
+```
+
+```http
+GET /api/download/{filename}
+
+Response: 200 OK
+Content-Type: video/mp4
+Content-Disposition: attachment; filename="typing_effect.mp4"
+```
+
+### 5.3 System Status
+
+```http
+GET /api/health
+
+Response: 200 OK
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "active_jobs": 1,
+  "queue_length": 0,
+  "disk_space": "15.2GB available"
+}
+```
+
+---
+
+## 6. Coding Standards
+
+* **Black** (line length = 100) auto-formats every commit
+* **Flake8** must report zero errors  
+* **mypy** for static type checking
+* **pytest** for unit and integration tests
+* **Docker best practices**: multi-stage builds, minimal layers, security scanning
+* **Conventional Commits** for all commit messages
+
+---
+
+## 7. Video Generation Specifications
+
+### 7.1 Typing Code Effect
+
+1. **Headless Rendering**: `SDL_VIDEODRIVER=dummy` for container compatibility
+2. **Source Text**: Read from `assets/snake_code.txt` (≤ 120 chars per line)
+3. **Timing**: 80-100ms per character (~150 WPM) using `pygame.USEREVENT` timer
+4. **Font**: JetBrains Mono 32px, RGB(0,255,0) on black #000000
+5. **Cursor**: 32px rectangle blinking at 1Hz
+6. **Scrolling**: Start at line 92 (4K height limit), scroll 1 line/frame
+7. **Looping**: 2s pause → 30-frame fade-to-black → restart
+8. **Output**: Save frames as PNG sequence, assemble with FFmpeg
+
+### 7.2 Matrix Rain Effect  
+
+1. **Multi-depth Fonts**: 16px (far), 32px (mid), 48px (near)
+2. **Column Layout**: 16px spacing, random font per column
+3. **Animation Speed**: 1 glyph/frame (pixel speed varies by font height)
+4. **Trailing Effect**: 10% opaque black overlay per frame
+5. **Color Gradient**: New chars #BFFF00 → fade to #008000 over 8 frames
+6. **Reset Logic**: y > screen_height + random(0-200px)
+7. **Loop Duration**: Exactly 900 frames (15s @ 60fps)
+8. **Output**: PNG sequence → FFmpeg assembly
+
+---
+
+## 8. Container Operations
+
+### 8.1 Build & Deploy
+
+```bash
+# Build container
+docker-compose build --no-cache
+
+# Start services  
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Scale services (if needed)
+docker-compose up -d --scale video-fx-generator=2
+```
+
+### 8.2 Development Workflow
+
+```bash
+# Development with hot reload
+docker-compose -f docker-compose.dev.yml up
+
+# Run tests in container
+docker-compose exec video-fx-generator pytest tests/
+
+# Shell access for debugging
+docker-compose exec video-fx-generator bash
+
+# Clean up
+docker-compose down -v --remove-orphans
+```
+
+### 8.3 Production Deployment
+
+```bash
+# Production build
+docker-compose -f docker-compose.prod.yml build
+
+# Deploy with resource limits
+docker-compose -f docker-compose.prod.yml up -d
+
+# Health check
+curl http://localhost:8082/api/health
+```
+
+---
+
+## 9. Security & Performance
+
+### 9.1 Container Security
+
+* **Non-root user**: Run as `appuser` (UID 1000)
+* **Read-only filesystem**: Except for `/app/output` and `/app/temp`
+* **Resource limits**: Memory 4GB, CPU 2 cores max
+* **Network isolation**: Only expose port 8082
+* **Secrets management**: Use Docker secrets for sensitive data
+
+### 9.2 Performance Optimization
+
+* **Multi-stage builds**: Minimize final image size
+* **Layer caching**: Optimize Dockerfile layer order
+* **Concurrent jobs**: Limit to 2 simultaneous video generations
+* **Cleanup automation**: Auto-delete temp files after 1 hour
+* **Health monitoring**: Prometheus metrics endpoint
+
+---
+
+## 10. CI/CD Pipeline
+
+### 10.1 GitHub Actions Workflow
+
+```yaml
+name: Docker CI/CD
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build test image
+        run: docker-compose -f docker-compose.test.yml build
+      - name: Run tests
+        run: docker-compose -f docker-compose.test.yml run --rm test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build production image
+        run: docker-compose -f docker-compose.prod.yml build
+      - name: Push to registry
+        run: docker-compose -f docker-compose.prod.yml push
+```
+
+### 10.2 Quality Gates
+
+1. **All tests pass** (unit, integration, API)
+2. **Security scan clean** (Trivy, Snyk)
+3. **Performance benchmarks met** (video generation time < 2x realtime)
+4. **Container size < 500MB** (compressed)
+5. **Health check passes** within 30s of startup
+
+---
+
+## 11. Monitoring & Logging
+
+### 11.1 Application Logs
+
+```python
+import logging
+import structlog
+
+# Structured logging for container environments
+logger = structlog.get_logger()
+logger.info("Video generation started", job_id=job_id, effect_type="typing")
+```
+
+### 11.2 Metrics Collection
+
+* **Generation time** per video type
+* **Queue length** and processing rate
+* **Resource utilization** (CPU, memory, disk)
+* **Error rates** and failure modes
+* **API response times**
+
+---
+
+## 12. Troubleshooting
+
+### 12.1 Common Issues
+
+**Container won't start:**
+```bash
+# Check logs
+docker-compose logs video-fx-generator
+
+# Verify port availability
+netstat -tulpn | grep 8082
+
+# Check volume permissions
+ls -la output/ temp/
+```
+
+**Video generation fails:**
+```bash
+# Check SDL driver
+docker-compose exec video-fx-generator python -c "import pygame; pygame.init()"
+
+# Verify FFmpeg
+docker-compose exec video-fx-generator ffmpeg -version
+
+# Test headless rendering
+docker-compose exec video-fx-generator python -c "
+import os
+os.environ['SDL_VIDEODRIVER'] = 'dummy'
+import pygame
+pygame.display.init()
+print('Headless rendering OK')
+"
+```
+
+**API not responding:**
+```bash
+# Health check
+curl -v http://localhost:8082/api/health
+
+# Container status
+docker-compose ps
+
+# Network connectivity
+docker-compose exec video-fx-generator netstat -tulpn
+```
+
+---
+
+*Changes to these guidelines require PR approval from the Tech Lead and successful CI/CD pipeline execution.*

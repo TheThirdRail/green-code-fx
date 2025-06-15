@@ -1,0 +1,130 @@
+# Green‑Code FX Projects – Engineering Rules
+
+These rules govern the **two chroma‑key animation deliverables**: (1) *Typing Code Effect* and (2) *Matrix Rain Effect*.  All contributors **must** follow this document so the visuals look identical across machines and remain easy to maintain.
+
+---
+
+## 1  Deliverables
+
+|  ID        |  Script            |  Window Size |  Target FPS |  Duration                |  Output                                 |
+| ---------- | ------------------ | ------------ | ----------- | ------------------------ | --------------------------------------- |
+| **TYPING** | `typing_effect.py` | 3840 × 2160  | 60 fps      | ≥ 90 s loop or long take | 4K MP4 (H.264 lossless or CQP ≤ 20)     |
+| **RAIN**   | `matrix_rain.py`   | 3840 × 2160  | 60 fps      | seamless 15 s loop       | 4K MP4 (H.264 lossless) or PNG sequence |
+
+---
+
+## 2  Canonical Tech Stack
+
+### 2.1  Languages & Runtimes
+
+* **Python 3.12** for all logic (CPython only).
+* **Pygame ≥ 2.5** for rendering & event loop.
+* **FFmpeg 6.x** (CLI) for assembling image sequences when off‑screen rendering.
+* **OBS 30+** for real‑time 4K screen capture (CQP 20, key‑int 2).
+
+### 2.2  Environment
+
+1. Create project dir `green‑code‑fx`.
+2. ```bash
+   conda create -n greenfx python=3.12 pygame ffmpeg -c conda-forge
+   conda activate greenfx
+   ```
+3. Install **Black** + **Flake8** + **Pre‑commit**:
+
+   ```bash
+   pip install black flake8 pre-commit
+   pre-commit install
+   ```
+
+### 2.3  Editor
+
+* **VS Code** with *Augment Code*, Python extension, and Pylance.
+* Recommended settings stored in `.vscode/settings.json`.
+
+---
+
+## 3  Folder Layout
+
+```
+green-code-fx/
+├─ typing_effect.py
+├─ matrix_rain.py
+├─ snake_code.txt          # source code displayed in typing effect
+├─ assets/
+│   └─ fonts/
+│       ├─ JetBrainsMono-Regular.ttf
+│       └─ matrix-katakana.ttf
+├─ requirements.txt        # generated via pip‑freeze
+├─ README.md
+└─ .pre-commit-config.yaml
+```
+
+---
+
+## 4  Coding Standards
+
+* **Black** (line length = 100) auto‑formats every commit.
+* **Flake8** must report zero errors.
+* Docstrings use *Google style* with full type hints.
+* Commit messages: **Conventional Commits** (e.g. `feat(rain): add depth‑based blur`).
+
+---
+
+## 5  Typing Code Effect Rules
+
+1. **Source text** lives in `snake_code.txt`. Keep ≤ 120 chars per line; no tabs.
+2. Timing: reveal one character every 80–100 ms (\~150 WPM). Use a `pygame.USEREVENT` timer.
+3. Font: JetBrains Mono 32 px, RGB (0,255,0) on black `#000`. Cursor is a 32 px rectangle blinking at 1 Hz.
+4. Scroll: if text reaches 92 lines (4K at 32 px + line spacing 4), start vertical scroll at 1 line/frame.
+5. **Looping:** after last char, pause 2 s, clear screen with fade‑to‑black over 30 frames, then restart.
+
+---
+
+## 6  Matrix Rain Effect Rules
+
+1. Three font sizes for depth: 16 px (far), 32 px (mid), 48 px (near).
+2. Column spacing = smallest font width (approx 16 px). Each column randomly picks a font size on spawn.
+3. Speed = 1 glyph per frame; pixel speed therefore scales with font height giving parallax.
+4. Create trailing effect by blitting a 10 %‑opaque black surface after drawing each frame.
+5. Color ramp: newest char `#BFFF00`; trail chars fade to `#008000` over 8 frames.
+6. Reset column when y > screen + rand(0–200 px).
+7. Generate 900 frames (15 s at 60 fps) and export as `rain_%04d.png`.
+
+---
+
+## 7  Capture & Export Guidelines
+
+* **Real‑time capture:** use OBS Studio → Settings → Output → Recording:
+
+  * Encoder NVENC / QSV if available.
+  * Rate control **CQP 20**, Keyframe 2 s, Profile High, GPU 0.
+* **Off‑screen render:** add `--save` flag to scripts to dump PNGs, then:
+
+  ```bash
+  ffmpeg -framerate 60 -i rain_%04d.png -c:v libx264 -crf 0 -preset slow rain.mp4
+  ```
+* Compositing: in Resolve/AE, set layer blend‑mode to **Screen** or **Add** to drop black.
+
+---
+
+## 8  CI / CD
+
+* GitHub Actions `python.yml` runs lint, unit tests, and builds both animations in headless mode (dummy SDL).
+* Artifacts stored 30 days for QA review.
+
+---
+
+## 9  Security & Legal
+
+* Fonts under OFL or SIL license only; include license in `assets/fonts/LICENSES`.
+* No third‑party code without SPDX‑compatible license.
+
+---
+
+## 10  Approval Gates
+
+1. All tests & linters green.
+2. Reviewer checklist completed (visual fidelity, FPS, color, duration).
+3. Tech Lead merges to `main`; GitHub Action tags SemVer release.
+
+*Changes to these rules require a PR with approval from the Animation Lead and Tech Lead.*

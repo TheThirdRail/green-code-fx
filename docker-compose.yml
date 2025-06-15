@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  video-fx-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: green-code-fx-generator
+    ports:
+      - "8082:8082"
+    volumes:
+      # Persistent storage for generated videos
+      - ./output:/app/output:rw
+      # Read-only access to assets (fonts, source code)
+      - ./assets:/app/assets:ro
+      # Temporary frame storage (ephemeral)
+      - ./temp:/app/temp:rw
+      # Development: mount source for hot reload (comment out for production)
+      - ./src:/app/src:ro
+    environment:
+      # Core configuration
+      - SDL_VIDEODRIVER=dummy
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=development
+      
+      # Video generation settings
+      - VIDEO_OUTPUT_DIR=/app/output
+      - ASSETS_DIR=/app/assets
+      - TEMP_DIR=/app/temp
+      
+      # API configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8082
+      - MAX_CONCURRENT_JOBS=2
+      
+      # Logging
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+    
+    # Resource limits for development
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check override for development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named volumes for better management (optional)
+volumes:
+  video_output:
+    driver: local
+  temp_frames:
+    driver: local
+
+# Network configuration (optional)
+networks:
+  default:
+    name: green-code-fx-network
+    driver: bridge

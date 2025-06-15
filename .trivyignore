@@ -1,0 +1,15 @@
+# Trivy ignore file for Green-Code FX
+# This file contains vulnerabilities that are acceptable or have been reviewed
+
+# Example: Ignore specific CVE that doesn't affect our use case
+# CVE-2023-12345
+
+# Ignore low severity vulnerabilities in development dependencies
+# (Uncomment and modify as needed)
+# CVE-2023-*
+
+# Ignore vulnerabilities in base OS packages that don't affect container security
+# (Add specific CVEs after security review)
+
+# Note: Only add entries here after proper security review and risk assessment
+# Each ignored vulnerability should have a comment explaining why it's safe to ignore
