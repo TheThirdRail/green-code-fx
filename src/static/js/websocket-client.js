@@ -184,8 +184,8 @@ const WebSocketClient = {
             // Use secure WebSocket if page is HTTPS
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.hostname;
-            const port = 8083; // WebSocket server port
-            
+            const port = window.location.port ? parseInt(window.location.port) + 1 : 8083; // WebSocket server port
+
             this.socket = new WebSocket(`${protocol}//${host}:${port}`);
             
             this.socket.onopen = () => {

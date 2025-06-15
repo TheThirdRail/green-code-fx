@@ -1,0 +1,23 @@
+{
+  "link_id": "link_1749977782_1649c798",
+  "title": "Video Settings - 6/15/2025",
+  "description": "Shared video generation settings",
+  "configuration": {
+    "duration": "10",
+    "font_family": "jetbrains",
+    "font_size": "28",
+    "text_color": "#00599C",
+    "typing_speed": "90",
+    "custom_text": "",
+    "text_input_method": "default",
+    "output_format": "mp4",
+    "timestamp": "2025-06-15T08:56:05.156Z"
+  },
+  "created_by": "172.20.0.1",
+  "created_at": "2025-06-15T08:56:22.545509",
+  "expires_at": "2025-06-15T09:56:22.545499",
+  "access_count": 3,
+  "max_access_count": null,
+  "is_public": true,
+  "password_hash": null
+}

@@ -30,7 +30,7 @@ try:
     from .text_processor import text_processor
     from .batch_processor import batch_processor
     from .websocket_server import websocket_manager, start_websocket_server_thread
-    from .collaboration_manager import collaboration_manager
+
 except ImportError:
     # Handle direct execution
     from config import config
@@ -45,7 +45,6 @@ except ImportError:
     from metrics import metrics, track_http_request, start_metrics_updater
     from batch_processor import batch_processor
     from websocket_server import websocket_manager, start_websocket_server_thread
-    from collaboration_manager import collaboration_manager
 
 
 # Configure structured logging
@@ -635,11 +634,22 @@ def create_batch():
         if len(items) > 50:  # Reasonable limit
             return jsonify({"error": "Maximum 50 items per batch"}), 400
 
-        # Validate priority
+        # Validate and convert priority
         try:
-            priority_enum = JobPriority(priority)
+            # Handle both string and enum values
+            if isinstance(priority, str):
+                priority_map = {
+                    "low": JobPriority.LOW,
+                    "normal": JobPriority.NORMAL,
+                    "high": JobPriority.HIGH
+                }
+                priority_enum = priority_map.get(priority.lower())
+                if priority_enum is None:
+                    return jsonify({"error": f"Invalid priority: {priority}. Must be 'low', 'normal', or 'high'"}), 400
+            else:
+                priority_enum = JobPriority(priority)
         except ValueError:
-            return jsonify({"error": f"Invalid priority: {priority}"}), 400
+            return jsonify({"error": f"Invalid priority: {priority}. Must be 'low', 'normal', or 'high'"}), 400
 
         # Validate each item
         for i, item in enumerate(items):
@@ -795,178 +805,7 @@ def get_websocket_status():
         return jsonify({"error": "Internal server error"}), 500
 
 
-# ============================================================================
-# Collaboration and Sharing Endpoints
-# ============================================================================
 
-@app.route("/api/collaboration/share", methods=["POST"])
-@track_http_request
-def create_shareable_link():
-    """Create a shareable link for configuration."""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data provided"}), 400
-
-        title = data.get("title", "").strip()
-        description = data.get("description", "").strip()
-        configuration = data.get("configuration", {})
-        expires_hours = data.get("expires_hours")
-        max_access_count = data.get("max_access_count")
-        password = data.get("password")
-
-        # Validation
-        if not title:
-            return jsonify({"error": "Title is required"}), 400
-
-        if not configuration:
-            return jsonify({"error": "Configuration is required"}), 400
-
-        # Create shareable link
-        share_url = collaboration_manager.create_shareable_link(
-            title=title,
-            description=description,
-            configuration=configuration,
-            created_by=request.remote_addr,  # Use IP as user identifier for now
-            expires_hours=expires_hours,
-            max_access_count=max_access_count,
-            password=password
-        )
-
-        logger.info("Shareable link created", title=title, created_by=request.remote_addr)
-
-        return jsonify({
-            "share_url": share_url,
-            "status": "created"
-        }), 201
-
-    except Exception as e:
-        logger.error("Failed to create shareable link", error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/collaboration/links", methods=["GET"])
-@track_http_request
-def list_shareable_links():
-    """List shareable links for the current user."""
-    try:
-        created_by = request.remote_addr  # Use IP as user identifier for now
-        links = collaboration_manager.list_shareable_links(created_by=created_by)
-        return jsonify({"links": links})
-    except Exception as e:
-        logger.error("Failed to list shareable links", error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/share/<link_id>", methods=["GET"])
-@track_http_request
-def access_shareable_link(link_id: str):
-    """Access a shareable link and return the configuration."""
-    try:
-        password = request.args.get("password")
-
-        result = collaboration_manager.access_shareable_link(link_id, password)
-
-        if not result:
-            return render_template("error.html",
-                                 error_title="Link Not Found",
-                                 error_message="The shareable link you're looking for doesn't exist or has expired."), 404
-
-        if "error" in result:
-            if result["error"] == "password_required":
-                return render_template("share_password.html", link_id=link_id)
-            elif result["error"] == "invalid_password":
-                return render_template("share_password.html", link_id=link_id,
-                                     error="Invalid password. Please try again.")
-
-        # Render the main page with the shared configuration
-        return render_template("index.html", shared_config=result["configuration"])
-
-    except Exception as e:
-        logger.error("Failed to access shareable link", link_id=link_id, error=str(e))
-        return render_template("error.html",
-                             error_title="Error",
-                             error_message="An error occurred while accessing the shared link."), 500
-
-
-@app.route("/api/collaboration/collections", methods=["POST"])
-@track_http_request
-def create_preset_collection():
-    """Create a new preset collection."""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data provided"}), 400
-
-        name = data.get("name", "").strip()
-        description = data.get("description", "").strip()
-        presets = data.get("presets", [])
-        is_public = data.get("is_public", False)
-        tags = data.get("tags", [])
-
-        # Validation
-        if not name:
-            return jsonify({"error": "Collection name is required"}), 400
-
-        if not presets or not isinstance(presets, list):
-            return jsonify({"error": "Presets are required"}), 400
-
-        # Create preset collection
-        collection_id = collaboration_manager.create_preset_collection(
-            name=name,
-            description=description,
-            presets=presets,
-            created_by=request.remote_addr,
-            is_public=is_public,
-            tags=tags
-        )
-
-        logger.info("Preset collection created", collection_id=collection_id,
-                   name=name, created_by=request.remote_addr)
-
-        return jsonify({
-            "collection_id": collection_id,
-            "status": "created"
-        }), 201
-
-    except Exception as e:
-        logger.error("Failed to create preset collection", error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/collaboration/collections", methods=["GET"])
-@track_http_request
-def list_preset_collections():
-    """List preset collections."""
-    try:
-        created_by = request.args.get("created_by")
-        include_public = request.args.get("include_public", "true").lower() == "true"
-
-        if not created_by:
-            created_by = request.remote_addr
-
-        collections = collaboration_manager.list_preset_collections(
-            created_by=created_by,
-            include_public=include_public
-        )
-
-        return jsonify({"collections": collections})
-
-    except Exception as e:
-        logger.error("Failed to list preset collections", error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/collaboration/stats", methods=["GET"])
-@track_http_request
-def get_collaboration_stats():
-    """Get collaboration system statistics."""
-    try:
-        stats = collaboration_manager.get_collaboration_stats()
-        return jsonify(stats)
-    except Exception as e:
-        logger.error("Failed to get collaboration stats", error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
 
 
 # ============================================================================

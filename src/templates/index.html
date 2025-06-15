@@ -75,12 +75,6 @@
                                     <div class="upload-success d-none">
                                         <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
                                         <p class="mb-0" id="uploadedFileName"></p>
-                                        <div id="languageDetection" class="mt-2">
-                                            <small class="text-muted">
-                                                <i class="fas fa-search fa-spin me-1"></i>
-                                                Detecting language...
-                                            </small>
-                                        </div>
                                         <button type="button" class="btn btn-outline-danger btn-sm mt-2" onclick="FormManager.clearFileUpload()">Remove</button>
                                     </div>
                                 </div>
@@ -320,88 +314,9 @@
 <script src="{{ url_for('static', filename='js/form-handler.js') }}"></script>
 
 <script>
-// Handle shared configuration if present
-{% if shared_config %}
+// Application initialization script
 document.addEventListener('DOMContentLoaded', function() {
-    const sharedConfig = {{ shared_config | tojsonfilter | safe }};
-    if (sharedConfig) {
-        // Apply shared configuration to form
-        applySharedConfiguration(sharedConfig);
-
-        // Show notification about shared configuration
-        setTimeout(() => {
-            if (typeof Utils !== 'undefined') {
-                Utils.showToast('Shared configuration loaded successfully!', 'success');
-            }
-        }, 1000);
-    }
+    console.log('Green-Code FX Typing Effect Generator loaded');
 });
-
-function applySharedConfiguration(config) {
-    // Apply configuration to form elements
-    Object.keys(config).forEach(key => {
-        const element = document.getElementById(key);
-        if (element) {
-            if (element.type === 'checkbox') {
-                element.checked = config[key];
-            } else if (element.type === 'radio') {
-                if (element.value === config[key]) {
-                    element.checked = true;
-                }
-            } else {
-                element.value = config[key];
-            }
-
-            // Trigger change event to update UI
-            const event = new Event('change', { bubbles: true });
-            element.dispatchEvent(event);
-        }
-    });
-
-    // Handle special cases
-    if (config.custom_text) {
-        const customTextArea = document.getElementById('customText');
-        if (customTextArea) {
-            customTextArea.value = config.custom_text;
-        }
-    }
-
-    // Update text input method if specified
-    if (config.text_input_method) {
-        const radioButton = document.querySelector(`input[name="textInputMethod"][value="${config.text_input_method}"]`);
-        if (radioButton) {
-            radioButton.checked = true;
-            radioButton.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-    }
-
-    // Show shared configuration banner
-    showSharedConfigBanner(config);
-}
-
-function showSharedConfigBanner(config) {
-    const banner = document.createElement('div');
-    banner.className = 'alert alert-info alert-dismissible fade show mt-3';
-    banner.innerHTML = `
-        <div class="d-flex align-items-center">
-            <i class="fas fa-share-alt me-3 fa-lg"></i>
-            <div>
-                <strong>Shared Configuration Loaded</strong><br>
-                <small class="text-muted">
-                    ${config.title || 'Untitled configuration'} -
-                    Created: ${config.timestamp ? new Date(config.timestamp).toLocaleDateString() : 'Unknown date'}
-                </small>
-            </div>
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-
-    // Insert banner at the top of the main content
-    const mainCard = document.querySelector('.card');
-    if (mainCard && mainCard.parentNode) {
-        mainCard.parentNode.insertBefore(banner, mainCard);
-    }
-}
-{% endif %}
 </script>
 {% endblock %}

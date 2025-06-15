@@ -7,7 +7,7 @@
     --bg-dark: #1a1a1a;
     --bg-darker: #0d1117;
     --border-color: #30363d;
-    --text-muted: #8b949e;
+    --text-muted: #b1bac4;  /* Improved contrast from #8b949e */
     --text-primary: #ffffff;
     --text-secondary: #e6e6e6;
     --card-bg: #1a1a1a;
@@ -22,7 +22,7 @@
     --bg-dark: #ffffff;
     --bg-darker: #f8f9fa;
     --border-color: #dee2e6;
-    --text-muted: #6c757d;
+    --text-muted: #495057;  /* Improved contrast from #6c757d */
     --text-primary: #212529;
     --text-secondary: #495057;
     --card-bg: #ffffff;

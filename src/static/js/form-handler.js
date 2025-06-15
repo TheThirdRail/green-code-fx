@@ -297,62 +297,9 @@ const FormManager = {
         if (placeholder) placeholder.classList.add('d-none');
         if (success) success.classList.remove('d-none');
         if (fileName) fileName.textContent = `${file.name} (${GreenCodeFX.Utils.formatFileSize(file.size)})`;
-
-        // Detect language for the uploaded file
-        this.detectFileLanguage(file);
     },
 
-    async detectFileLanguage(file) {
-        try {
-            const text = await this.readFileContent(file);
-            const response = await fetch('/api/text/detect-language', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    text: text.substring(0, 5000), // First 5KB for detection
-                    filename: file.name
-                })
-            });
 
-            if (response.ok) {
-                const result = await response.json();
-                this.displayLanguageDetection(result.language);
-            } else {
-                this.displayLanguageDetection(null);
-            }
-        } catch (error) {
-            console.warn('Language detection failed:', error);
-            this.displayLanguageDetection(null);
-        }
-    },
-
-    displayLanguageDetection(languageInfo) {
-        const detectionElement = document.getElementById('languageDetection');
-        if (!detectionElement) return;
-
-        if (languageInfo) {
-            const confidencePercent = Math.round(languageInfo.confidence * 100);
-            const confidenceClass = languageInfo.confidence >= 0.8 ? 'text-success' :
-                                   languageInfo.confidence >= 0.6 ? 'text-warning' : 'text-muted';
-
-            detectionElement.innerHTML = `
-                <small class="${confidenceClass}">
-                    <i class="fas fa-code me-1"></i>
-                    ${languageInfo.name}
-                    <span class="text-muted">(${confidencePercent}% confidence)</span>
-                </small>
-            `;
-        } else {
-            detectionElement.innerHTML = `
-                <small class="text-muted">
-                    <i class="fas fa-file-text me-1"></i>
-                    Plain text
-                </small>
-            `;
-        }
-    },
 
     clearFileUpload() {
         const fileInput = document.getElementById('textFile');
@@ -752,14 +699,23 @@ class Snake {
                 errors.push('Please select a text file');
             } else {
                 const file = fileInput.files[0];
-                if (!file.name.toLowerCase().endsWith('.txt')) {
-                    errors.push('Only .txt files are allowed');
+                // Allow more file types, not just .txt
+                const allowedExtensions = ['.txt', '.py', '.js', '.ts', '.java', '.cpp', '.c', '.h', '.hpp',
+                    '.cs', '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala',
+                    '.html', '.htm', '.css', '.scss', '.sass', '.less', '.json',
+                    '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
+                    '.md', '.markdown', '.rst', '.sql', '.sh', '.bash', '.zsh',
+                    '.fish', '.ps1', '.bat', '.cmd'];
+                const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+                if (!allowedExtensions.includes(fileExtension)) {
+                    errors.push(`File type ${fileExtension} is not supported. Supported types: ${allowedExtensions.join(', ')}`);
                 }
                 if (file.size > 10 * 1024 * 1024) { // 10MB limit
                     errors.push('File size must be less than 10MB');
                 }
             }
         }
+        // For 'default' method, no additional validation needed
 
         // Return validation result
         if (errors.length > 0) {
