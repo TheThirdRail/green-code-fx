@@ -80,6 +80,8 @@ class VideoGenerator:
         typing_speed: int = None,
         custom_text: Optional[str] = None,
         uploaded_file_path: Optional[str] = None,
+        fps: int = None,
+        resolution: str = None,
         progress_callback: Optional[Callable[[int], None]] = None
     ) -> str:
         """
@@ -96,6 +98,8 @@ class VideoGenerator:
             typing_speed: Typing speed in words per minute (defaults to config value)
             custom_text: Custom text to display instead of source file
             uploaded_file_path: Path to uploaded text file
+            fps: Frame rate in frames per second (defaults to config value)
+            resolution: Video resolution ('1080p', '1440p', '4k', defaults to config)
             progress_callback: Optional progress callback function
 
         Returns:
@@ -109,6 +113,16 @@ class VideoGenerator:
         if typing_speed is None:
             typing_speed = config.TYPING_WPM
 
+        # Use default FPS if not provided
+        if fps is None:
+            fps = config.TARGET_FPS
+
+        # Parse resolution and get dimensions
+        if resolution is None:
+            resolution = "4k"
+
+        video_width, video_height = self._get_resolution_dimensions(resolution)
+
         # Calculate character delay from WPM (Words Per Minute)
         # Average word length is ~5 characters, so chars per minute = WPM * 5
         chars_per_minute = typing_speed * 5
@@ -118,10 +132,18 @@ class VideoGenerator:
         # Convert hex color to RGB
         text_color_rgb = config.hex_to_rgb(text_color)
 
+        # Update screen size if resolution is different from current
+        if (video_width, video_height) != (config.VIDEO_WIDTH, config.VIDEO_HEIGHT):
+            self.screen = pygame.display.set_mode((video_width, video_height))
+            logger.info("Updated screen resolution",
+                       new_resolution=f"{video_width}x{video_height}",
+                       previous_resolution=f"{config.VIDEO_WIDTH}x{config.VIDEO_HEIGHT}")
+
         logger.info("Starting typing effect generation",
                    job_id=job_id, duration=duration, source_file=source_file,
                    font_family=font_family, font_size=font_size, text_color=text_color,
-                   typing_speed=typing_speed, char_delay_ms=char_delay_ms)
+                   typing_speed=typing_speed, char_delay_ms=char_delay_ms,
+                   fps=fps, resolution=f"{video_width}x{video_height}")
 
         # Start overall profiling
         profiler.start_operation("typing_effect_total",
@@ -208,7 +230,7 @@ class VideoGenerator:
             profiler.end_operation("load_font", font_loaded=font_loaded, font_family=font_family)
             
             # Calculate total frames needed
-            total_frames = duration * config.TARGET_FPS
+            total_frames = duration * fps
             frame_count = 0
             
             # Typing state
@@ -224,12 +246,12 @@ class VideoGenerator:
             # Cursor state
             cursor_visible = True
             cursor_blink_timer = 0
-            cursor_blink_interval = config.TARGET_FPS // (2 * config.TYPING_CURSOR_BLINK_HZ)  # Frames per blink
+            cursor_blink_interval = fps // (2 * config.TYPING_CURSOR_BLINK_HZ)  # Frames per blink
 
             # Looping state
             typing_complete = False
             pause_timer = 0
-            pause_duration_frames = config.TYPING_LOOP_PAUSE_SECONDS * config.TARGET_FPS
+            pause_duration_frames = config.TYPING_LOOP_PAUSE_SECONDS * fps
             fade_timer = 0
             fade_duration_frames = config.TYPING_FADE_FRAMES
             loop_state = "typing"  # "typing", "paused", "fading", "restarting"
@@ -274,9 +296,13 @@ class VideoGenerator:
                 self.screen.fill(config.COLOR_BLACK)
 
                 # Calculate scrolling if needed
+                # Count completed lines plus current line being typed (if any)
                 total_lines_to_display = len(typed_lines) + (1 if current_line < len(code_lines) else 0)
-                if total_lines_to_display > max_visible_lines:
-                    scroll_offset = total_lines_to_display - max_visible_lines
+
+                # Start scrolling immediately when we reach the maximum visible lines
+                # This ensures the cursor stays at the bottom edge without delay
+                if total_lines_to_display >= max_visible_lines:
+                    scroll_offset = total_lines_to_display - max_visible_lines + 1
                 else:
                     scroll_offset = 0
 
@@ -295,7 +321,7 @@ class VideoGenerator:
 
                     # Use syntax highlighting for complete lines
                     self.render_syntax_highlighted_text(line, font, 10, y_offset,
-                                                       start_line + visible_line_count)
+                                                       scroll_offset + visible_line_count)
                     y_offset += line_height
                     visible_line_count += 1
 
@@ -334,7 +360,7 @@ class VideoGenerator:
                     fade_alpha = int((fade_timer / fade_duration_frames) * 255)
                     fade_alpha = min(fade_alpha, 255)
 
-                    fade_surface = pygame.Surface((config.VIDEO_WIDTH, config.VIDEO_HEIGHT))
+                    fade_surface = pygame.Surface((video_width, video_height))
                     fade_surface.fill(config.COLOR_BLACK)
                     fade_surface.set_alpha(fade_alpha)
                     self.screen.blit(fade_surface, (0, 0))
@@ -373,7 +399,7 @@ class VideoGenerator:
                     progress_callback(min(progress, 85))
                 
                 frame_count += 1
-                self.clock.tick(config.TARGET_FPS)
+                self.clock.tick(fps)
             
             # Stop typing timer
             pygame.time.set_timer(TYPE_EVENT, 0)
@@ -385,11 +411,11 @@ class VideoGenerator:
             # Generate output file
             if output_format == "mp4":
                 profiler.start_operation("video_assembly", format="mp4")
-                output_file = self._assemble_video(job_id, frames_dir, "typing")
+                output_file = self._assemble_video(job_id, frames_dir, "typing", fps)
                 profiler.end_operation("video_assembly")
             elif output_format == "gif":
                 profiler.start_operation("gif_assembly", format="gif")
-                output_file = self._assemble_gif(job_id, frames_dir, "typing")
+                output_file = self._assemble_gif(job_id, frames_dir, "typing", fps)
                 profiler.end_operation("gif_assembly")
             else:
                 profiler.start_operation("png_archive", format="png")
@@ -419,7 +445,9 @@ class VideoGenerator:
                     "font_size": font_size,
                     "text_color": text_color,
                     "typing_speed": typing_speed,
-                    "custom_text": custom_text
+                    "custom_text": custom_text,
+                    "fps": fps,
+                    "resolution": resolution
                 }
 
                 progress_estimator.record_generation(
@@ -457,7 +485,9 @@ class VideoGenerator:
                     "font_size": font_size,
                     "text_color": text_color,
                     "typing_speed": typing_speed,
-                    "custom_text": custom_text
+                    "custom_text": custom_text,
+                    "fps": fps,
+                    "resolution": resolution
                 }
 
                 progress_estimator.record_generation(
@@ -568,7 +598,7 @@ class VideoGenerator:
 
         return current_x - x
 
-    def _assemble_video(self, job_id: str, frames_dir: Path, effect_type: str) -> str:
+    def _assemble_video(self, job_id: str, frames_dir: Path, effect_type: str, fps: int = None) -> str:
         """
         Assemble PNG frames into MP4 video using FFmpeg with optimized settings.
 
@@ -580,16 +610,21 @@ class VideoGenerator:
             job_id: Unique job identifier for output naming
             frames_dir: Directory containing PNG frame sequence
             effect_type: Type of effect for filename generation
+            fps: Frame rate for the video (defaults to config value)
 
         Returns:
             Path to the generated MP4 file
         """
+        # Use default FPS if not provided
+        if fps is None:
+            fps = config.TARGET_FPS
+
         output_file = config.OUTPUT_DIR / f"{job_id}_{effect_type}.mp4"
-        
+
         # FFmpeg command optimized for chroma-key content
         cmd = [
             "ffmpeg", "-y",  # Overwrite output file
-            "-framerate", str(config.TARGET_FPS),
+            "-framerate", str(fps),
             "-i", str(frames_dir / "frame_%06d.png"),
             "-c:v", "libx264",
             "-crf", str(config.VIDEO_CRF),  # High quality, optimized file size
@@ -648,7 +683,7 @@ class VideoGenerator:
                         user_message=error_report.user_message)
             raise
 
-    def _assemble_gif(self, job_id: str, frames_dir: Path, effect_type: str) -> str:
+    def _assemble_gif(self, job_id: str, frames_dir: Path, effect_type: str, fps: int = None) -> str:
         """
         Assemble PNG frames into GIF using FFmpeg with optimized settings.
 
@@ -659,10 +694,15 @@ class VideoGenerator:
             job_id: Unique job identifier for output naming
             frames_dir: Directory containing PNG frame sequence
             effect_type: Type of effect for filename generation
+            fps: Frame rate for the GIF (defaults to config value)
 
         Returns:
             Path to the generated GIF file
         """
+        # Use default FPS if not provided
+        if fps is None:
+            fps = config.TARGET_FPS
+
         output_file = config.OUTPUT_DIR / f"{job_id}_{effect_type}.gif"
         palette_file = config.TEMP_DIR / f"{job_id}_palette.png"
 
@@ -686,7 +726,7 @@ class VideoGenerator:
                 # First pass: Generate optimized palette
                 palette_cmd = [
                     "ffmpeg", "-y",
-                    "-framerate", str(config.TARGET_FPS),
+                    "-framerate", str(fps),
                     "-i", str(frames_dir / "frame_%06d.png"),
                     "-vf", "palettegen=max_colors=256:reserve_transparent=0",
                     str(palette_file)
@@ -697,7 +737,7 @@ class VideoGenerator:
                 # Second pass: Create GIF using the generated palette
                 gif_cmd = [
                     "ffmpeg", "-y",
-                    "-framerate", str(config.TARGET_FPS),
+                    "-framerate", str(fps),
                     "-i", str(frames_dir / "frame_%06d.png"),
                     "-i", str(palette_file),
                     "-lavfi", "paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle",
@@ -762,8 +802,28 @@ class VideoGenerator:
         
         logger.info("PNG archive created", job_id=job_id, output_file=output_file)
         return str(output_file)
-    
 
+    def _get_resolution_dimensions(self, resolution: str) -> tuple[int, int]:
+        """
+        Get video dimensions for the specified resolution.
+
+        Args:
+            resolution: Resolution string ('1080p', '1440p', '4k')
+
+        Returns:
+            Tuple of (width, height) in pixels
+        """
+        resolution_map = {
+            "1080p": (1920, 1080),
+            "1440p": (2560, 1440),
+            "4k": (3840, 2160)
+        }
+
+        if resolution not in resolution_map:
+            logger.warning(f"Unknown resolution '{resolution}', defaulting to 4K")
+            return resolution_map["4k"]
+
+        return resolution_map[resolution]
 
     def __del__(self):
         """Clean up Pygame resources."""

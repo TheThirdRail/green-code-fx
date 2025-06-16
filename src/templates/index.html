@@ -154,8 +154,8 @@
                         <!-- Typing Speed (WPM) -->
                         <div class="col-md-6 mb-3">
                             <label for="typingSpeed" class="form-label">Typing Speed (WPM):</label>
-                            <input type="number" class="form-control bg-dark text-light border-secondary" id="typingSpeed" name="typing_speed" value="150" min="50" max="300">
-                            <div class="form-text text-help">Between 50 and 300 words per minute</div>
+                            <input type="number" class="form-control bg-dark text-light border-secondary" id="typingSpeed" name="typing_speed" value="150" min="10" max="300">
+                            <div class="form-text text-help">Between 10 and 300 words per minute</div>
                         </div>
 
                         <!-- Duration -->
@@ -182,16 +182,68 @@
                                 <option value="png">PNG Sequence (ZIP)</option>
                             </select>
                             <div class="form-text text-help">Choose output format</div>
-                        </div>
 
-                        <div class="col-md-6 mb-3">
-                            <div class="format-info">
+                            <!-- Format description aligned with dropdown -->
+                            <div class="format-info text-end mt-2">
                                 <small class="text-help">
                                     <div id="formatDescription">
                                         <strong>MP4:</strong> Best quality, smaller file size, compatible with all video players
                                     </div>
                                 </small>
                             </div>
+                        </div>
+
+                        <!-- FPS Selection -->
+                        <div class="col-md-6 mb-3">
+                            <label for="fps" class="form-label">Frame Rate (FPS):</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="fps" name="fps">
+                                <option value="24">24 FPS (Cinematic)</option>
+                                <option value="30">30 FPS (Standard)</option>
+                                <option value="60" selected>60 FPS (Smooth)</option>
+                            </select>
+                            <div class="form-text text-help">Choose video frame rate</div>
+
+                            <!-- FPS description aligned with dropdown -->
+                            <div class="format-info text-end mt-2">
+                                <small class="text-help">
+                                    <div id="fpsDescription">
+                                        <strong>60 FPS:</strong> Smoothest motion, larger file size
+                                    </div>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Video Settings Section -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="text-success mb-3">
+                                <i class="fas fa-cog me-2"></i>Video Settings
+                            </h5>
+                        </div>
+
+                        <!-- Resolution Selection -->
+                        <div class="col-md-6 mb-3">
+                            <label for="resolution" class="form-label">Resolution:</label>
+                            <select class="form-select bg-dark text-light border-secondary" id="resolution" name="resolution">
+                                <option value="1080p">1080p (1920 x 1080)</option>
+                                <option value="1440p">1440p (2560 x 1440)</option>
+                                <option value="4k" selected>4K (3840 x 2160)</option>
+                            </select>
+                            <div class="form-text text-help">Choose video resolution</div>
+
+                            <!-- Resolution description aligned with dropdown -->
+                            <div class="format-info text-end mt-2">
+                                <small class="text-help">
+                                    <div id="resolutionDescription">
+                                        <strong>4K:</strong> Highest quality, largest file size
+                                    </div>
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <!-- Empty column for spacing -->
                         </div>
                     </div>
 
@@ -218,7 +270,7 @@
         <!-- Preview Panel -->
         <div class="card bg-dark border-success mb-4">
             <div class="card-header bg-success text-dark">
-                <h5 class="mb-0">
+                <h5 class="mb-0" style="background-color: var(--primary-green) !important; color: #000000 !important; padding: 0.75rem; border-radius: 0;">
                     <i class="fas fa-eye me-2"></i>Preview
                 </h5>
             </div>
@@ -235,7 +287,7 @@
         <!-- Job Status Panel -->
         <div class="card bg-dark border-success">
             <div class="card-header bg-success text-dark">
-                <h5 class="mb-0">
+                <h5 class="mb-0" style="background-color: var(--primary-green) !important; color: #000000 !important; padding: 0.75rem; border-radius: 0;">
                     <i class="fas fa-tasks me-2"></i>Generation Status
                 </h5>
             </div>
@@ -292,8 +344,8 @@
                                             <strong class="text-secondary">Ctrl+P:</strong> Focus Preview<br>
                                         </div>
                                         <div class="col-6">
-                                            <strong class="text-secondary">Ctrl+T:</strong> Toggle Theme<br>
                                             <strong class="text-secondary">Escape:</strong> Cancel/Close<br>
+                                            <strong class="text-secondary">Theme:</strong> Use button above<br>
                                         </div>
                                     </div>
                                 </small>

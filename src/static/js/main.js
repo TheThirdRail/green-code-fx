@@ -62,14 +62,14 @@ const Utils = {
      * Show toast notification
      */
     showToast(message, type = 'info') {
-        // Create toast element
+        // Create toast element with consistent matrix green styling
         const toast = document.createElement('div');
-        toast.className = `toast align-items-center text-white bg-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} border-0`;
+        toast.className = `toast align-items-center border-0`;
         toast.setAttribute('role', 'alert');
         toast.innerHTML = `
             <div class="d-flex">
                 <div class="toast-body">${message}</div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
             </div>
         `;
 
@@ -495,12 +495,6 @@ const KeyboardManager = {
             if (e.ctrlKey && e.key === 'p') {
                 e.preventDefault();
                 this.togglePreview();
-            }
-
-            // Ctrl+T: Toggle theme
-            if (e.ctrlKey && e.key === 't') {
-                e.preventDefault();
-                ThemeManager.toggleTheme();
             }
 
             // Escape: Cancel generation or close modals
@@ -988,7 +982,6 @@ document.addEventListener('DOMContentLoaded', function() {
     ThemeManager.init();
     KeyboardManager.init();
     NotificationManager.init();
-    VideoPreviewManager.init();
     PresetManager.init();
     FontManager.loadAvailableFonts();
     ColorPickerManager.init();
@@ -998,12 +991,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof MobileOptimizationManager !== 'undefined') {
         MobileOptimizationManager.init();
         MobileOptimizationManager.optimizeForMobile();
-    }
-
-    // Initialize batch manager if available
-    if (typeof BatchManager !== 'undefined') {
-        BatchManager.init();
-        BatchManager.startAutoRefresh();
     }
 
     // Initialize WebSocket client if available
@@ -1107,7 +1094,6 @@ window.GreenCodeFX = {
     ThemeManager,
     KeyboardManager,
     NotificationManager,
-    VideoPreviewManager,
     PresetManager,
     FontManager,
     ColorPickerManager,

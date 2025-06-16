@@ -74,6 +74,18 @@ const FormManager = {
         if (outputFormat) {
             outputFormat.addEventListener('change', this.handleOutputFormatChange.bind(this));
         }
+
+        // FPS selection
+        const fpsSelect = document.getElementById('fps');
+        if (fpsSelect) {
+            fpsSelect.addEventListener('change', this.handleFpsChange.bind(this));
+        }
+
+        // Resolution selection
+        const resolutionSelect = document.getElementById('resolution');
+        if (resolutionSelect) {
+            resolutionSelect.addEventListener('change', this.handleResolutionChange.bind(this));
+        }
     },
 
     initializeFormState() {
@@ -94,13 +106,17 @@ const FormManager = {
         // Set initial output format description
         this.handleOutputFormatChange();
 
+        // Set initial FPS and resolution descriptions
+        this.handleFpsChange();
+        this.handleResolutionChange();
+
         // Setup auto-save for settings
         this.setupSettingsAutoSave();
     },
 
     setupSettingsAutoSave() {
         // Auto-save settings when form values change
-        const formElements = ['fontFamily', 'fontSize', 'textColor', 'typingSpeed', 'duration', 'outputFormat'];
+        const formElements = ['fontFamily', 'fontSize', 'textColor', 'typingSpeed', 'duration', 'outputFormat', 'fps', 'resolution'];
 
         formElements.forEach(elementId => {
             const element = document.getElementById(elementId);
@@ -121,7 +137,9 @@ const FormManager = {
             textColor: document.getElementById('textColor')?.value,
             typingSpeed: document.getElementById('typingSpeed')?.value,
             duration: document.getElementById('duration')?.value,
-            outputFormat: document.getElementById('outputFormat')?.value
+            outputFormat: document.getElementById('outputFormat')?.value,
+            fps: document.getElementById('fps')?.value,
+            resolution: document.getElementById('resolution')?.value
         };
 
         // Only save if we have valid settings
@@ -200,7 +218,7 @@ const FormManager = {
             if (percentage > 90) {
                 counter.className = 'text-danger';
             } else if (percentage > 75) {
-                counter.className = 'text-warning';
+                counter.className = 'text-success';
             } else {
                 counter.className = 'text-help';
             }
@@ -392,7 +410,7 @@ const FormManager = {
             console.error('Preview generation failed:', error);
             previewArea.innerHTML = `
                 <div class="preview-error text-center">
-                    <i class="fas fa-exclamation-triangle text-warning fa-2x mb-2"></i>
+                    <i class="fas fa-exclamation-triangle text-danger fa-2x mb-2"></i>
                     <p class="text-help">Failed to generate preview</p>
                 </div>
             `;
@@ -457,6 +475,60 @@ const FormManager = {
         }
 
         // Save format preference
+        this.saveCurrentSettings();
+    },
+
+    handleFpsChange() {
+        const fpsSelect = document.getElementById('fps');
+        const fpsDescription = document.getElementById('fpsDescription');
+
+        if (!fpsSelect || !fpsDescription) return;
+
+        const fps = fpsSelect.value;
+        let description = '';
+
+        switch (fps) {
+            case '24':
+                description = '<strong>24 FPS:</strong> Cinematic look, smaller file size, slight motion blur';
+                break;
+            case '30':
+                description = '<strong>30 FPS:</strong> Standard video, balanced quality and file size';
+                break;
+            case '60':
+                description = '<strong>60 FPS:</strong> Smoothest motion, larger file size';
+                break;
+        }
+
+        fpsDescription.innerHTML = description;
+
+        // Save FPS preference
+        this.saveCurrentSettings();
+    },
+
+    handleResolutionChange() {
+        const resolutionSelect = document.getElementById('resolution');
+        const resolutionDescription = document.getElementById('resolutionDescription');
+
+        if (!resolutionSelect || !resolutionDescription) return;
+
+        const resolution = resolutionSelect.value;
+        let description = '';
+
+        switch (resolution) {
+            case '1080p':
+                description = '<strong>1080p:</strong> Full HD, good quality, smaller file size';
+                break;
+            case '1440p':
+                description = '<strong>1440p:</strong> Quad HD, high quality, medium file size';
+                break;
+            case '4k':
+                description = '<strong>4K:</strong> Highest quality, largest file size';
+                break;
+        }
+
+        resolutionDescription.innerHTML = description;
+
+        // Save resolution preference
         this.saveCurrentSettings();
     },
 
@@ -672,8 +744,8 @@ class Snake {
 
         // Validate typing speed
         const typingSpeed = parseInt(data.typing_speed);
-        if (isNaN(typingSpeed) || typingSpeed < 50 || typingSpeed > 300) {
-            errors.push('Typing speed must be between 50 and 300 WPM');
+        if (isNaN(typingSpeed) || typingSpeed < 10 || typingSpeed > 300) {
+            errors.push('Typing speed must be between 10 and 300 WPM');
         }
 
         // Validate color
@@ -684,6 +756,18 @@ class Snake {
         // Validate font family
         if (!data.font_family || data.font_family.trim().length === 0) {
             errors.push('Font family is required');
+        }
+
+        // Validate FPS
+        const fps = parseInt(data.fps);
+        if (isNaN(fps) || ![24, 30, 60].includes(fps)) {
+            errors.push('FPS must be 24, 30, or 60');
+        }
+
+        // Validate resolution
+        const validResolutions = ['1080p', '1440p', '4k'];
+        if (!data.resolution || !validResolutions.includes(data.resolution)) {
+            errors.push('Resolution must be 1080p, 1440p, or 4K');
         }
 
         // Validate text input based on method
@@ -786,9 +870,9 @@ class Snake {
     validateTypingSpeedField(event) {
         const input = event.target;
         const value = parseInt(input.value);
-        const isValid = !isNaN(value) && value >= 50 && value <= 300;
+        const isValid = !isNaN(value) && value >= 10 && value <= 300;
 
-        this.setFieldValidation(input, isValid, isValid ? '' : 'Typing speed must be between 50 and 300 WPM');
+        this.setFieldValidation(input, isValid, isValid ? '' : 'Typing speed must be between 10 and 300 WPM');
     },
 
     validateColorField(event) {
@@ -850,6 +934,8 @@ class Snake {
         submitData.append('text_color', formData.text_color);
         submitData.append('typing_speed', formData.typing_speed);
         submitData.append('output_format', formData.output_format || 'mp4');
+        submitData.append('fps', formData.fps || '60');
+        submitData.append('resolution', formData.resolution || '4k');
 
         // Handle text input based on method
         if (formData.textInputMethod === 'custom') {
@@ -1067,7 +1153,7 @@ class Snake {
 
         switch (jobData.status) {
             case 'queued':
-                statusHTML = '<div class="status-processing"><i class="fas fa-clock text-warning me-2"></i><span class="text-warning">Queued for processing...</span></div>';
+                statusHTML = '<div class="status-processing"><i class="fas fa-clock text-success me-2"></i><span class="text-success">Queued for processing...</span></div>';
                 progressTextContent = 'Waiting in queue...';
                 break;
             case 'running':
@@ -1290,9 +1376,9 @@ class Snake {
 
                 recoveryHTML += `
                     <div class="recovery-suggestion mt-2">
-                        <div class="card bg-dark border-warning">
+                        <div class="card bg-dark border-success">
                             <div class="card-body py-2">
-                                <h6 class="card-title text-warning mb-1">
+                                <h6 class="card-title text-success mb-1">
                                     <i class="fas fa-tools me-1"></i>Recovery Suggestion
                                 </h6>
                                 <p class="card-text small mb-1">${suggestion.description}</p>
@@ -1304,7 +1390,7 @@ class Snake {
                                         Success Rate: ${successPercent}%
                                     </small>
                                 </div>
-                                <button class="btn btn-outline-warning btn-sm mt-2" onclick="FormManager.retryWithRecovery('${jobData.job_id}')">
+                                <button class="btn btn-outline-success btn-sm mt-2" onclick="FormManager.retryWithRecovery('${jobData.job_id}')">
                                     <i class="fas fa-redo me-1"></i>Try Recovery
                                 </button>
                             </div>

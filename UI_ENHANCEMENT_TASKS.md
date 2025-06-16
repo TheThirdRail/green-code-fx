@@ -136,12 +136,12 @@
 
 Based on the Phase 3 implementation, here are valuable enhancements that could be considered for future development:
 
-- [ ] **Real-time Preview Streaming**: Implement WebSocket connection to show live typing animation preview as users adjust settings
-- [ ] **Theme Customization**: Add dark/light theme toggle and custom color schemes beyond the current green theme
+- [x] **~~Real-time Preview Streaming~~**: ~~Implement WebSocket connection to show live typing animation preview as users adjust settings~~ **REMOVED** - Not useful, connection issues
+- [x] **Theme Customization**: ✅ COMPLETED - Dark/light theme toggle implemented with matrix green color scheme
 - [ ] **Advanced Font Management**: Support for custom font uploads and Google Fonts integration
 - [ ] **Preset Templates**: Create predefined templates for common programming languages with syntax highlighting
-- [ ] **Batch Processing**: Allow users to queue multiple video generations with different settings
-- [ ] **Progress Notifications**: Implement browser notifications for completed video generation when tab is not active
+- [x] **~~Batch Processing~~**: ~~Allow users to queue multiple video generations with different settings~~ **REMOVED** - Multiple windows work better
+- [x] **Progress Notifications**: ✅ COMPLETED - Browser notifications implemented for completed video generation when tab is not active
 - [ ] **Video Preview Player**: Add inline video player to preview generated content before download
 - [ ] **Export Options**: Support for additional output formats (GIF, WebM) and quality settings
 - [ ] **Keyboard Shortcuts**: Add hotkeys for common actions (Ctrl+Enter to generate, Ctrl+P for preview)

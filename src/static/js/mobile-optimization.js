@@ -307,9 +307,6 @@ const MobileOptimizationManager = {
                 <button class="btn btn-outline-success" onclick="document.getElementById('previewBtn').click()">
                     <i class="fas fa-eye me-2"></i>Preview
                 </button>
-                <button class="btn btn-outline-success" onclick="ThemeManager.toggleTheme()">
-                    <i class="fas fa-palette me-2"></i>Toggle Theme
-                </button>
             </div>
         `);
     },

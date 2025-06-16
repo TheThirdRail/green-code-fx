@@ -28,8 +28,7 @@ try:
     from .progress_estimator import progress_estimator
     from .error_recovery import error_recovery_service
     from .text_processor import text_processor
-    from .batch_processor import batch_processor
-    from .websocket_server import websocket_manager, start_websocket_server_thread
+
 
 except ImportError:
     # Handle direct execution
@@ -43,8 +42,7 @@ except ImportError:
     from resource_manager import (initialize_resource_management, shutdown_resource_management,
                                   get_resource_status, queue_video_job, JobPriority)
     from metrics import metrics, track_http_request, start_metrics_updater
-    from batch_processor import batch_processor
-    from websocket_server import websocket_manager, start_websocket_server_thread
+
 
 
 # Configure structured logging
@@ -346,6 +344,10 @@ def generate_typing_effect():
         typing_speed = data.get("typing_speed", config.TYPING_WPM)  # WPM
         custom_text = data.get("custom_text", None)
 
+        # New video settings parameters
+        fps = data.get("fps", config.TARGET_FPS)
+        resolution = data.get("resolution", "4k")
+
         # Basic validation
         if duration < 10 or duration > 600:
             return jsonify({"error": "Duration must be between 10 and 600 seconds"}), 400
@@ -360,9 +362,28 @@ def generate_typing_effect():
             }), 400
 
         # Validate typing speed
-        if not (50 <= typing_speed <= 300):
+        if not (10 <= typing_speed <= 300):
             return jsonify({
-                "error": "Typing speed must be between 50 and 300 WPM"
+                "error": "Typing speed must be between 10 and 300 WPM"
+            }), 400
+
+        # Validate FPS
+        try:
+            fps = int(fps)
+            if fps not in [24, 30, 60]:
+                return jsonify({
+                    "error": "FPS must be 24, 30, or 60"
+                }), 400
+        except (ValueError, TypeError):
+            return jsonify({
+                "error": "FPS must be a valid number (24, 30, or 60)"
+            }), 400
+
+        # Validate resolution
+        valid_resolutions = ["1080p", "1440p", "4k"]
+        if resolution not in valid_resolutions:
+            return jsonify({
+                "error": f"Resolution must be one of: {', '.join(valid_resolutions)}"
             }), 400
 
         # Validate font family
@@ -416,7 +437,9 @@ def generate_typing_effect():
             "font_size": font_size,
             "text_color": text_color,
             "typing_speed": typing_speed,
-            "custom_text": custom_text
+            "custom_text": custom_text,
+            "fps": fps,
+            "resolution": resolution
         }
 
         try:
@@ -448,7 +471,9 @@ def generate_typing_effect():
                 "text_color": text_color,
                 "typing_speed": typing_speed,
                 "custom_text": custom_text,
-                "uploaded_file_path": uploaded_file_path
+                "uploaded_file_path": uploaded_file_path,
+                "fps": fps,
+                "resolution": resolution
             },
             "estimated_duration": estimated_duration,
             "estimation_confidence": confidence_level,
@@ -473,6 +498,8 @@ def generate_typing_effect():
                     typing_speed=typing_speed,
                     custom_text=custom_text,
                     uploaded_file_path=uploaded_file_path,
+                    fps=fps,
+                    resolution=resolution,
                     progress_callback=lambda p: update_job_progress(job_id, p)
                 )
             except Exception as e:
@@ -603,206 +630,7 @@ def download_file(filename: str):
         return jsonify({"error": "Download failed"}), 500
 
 
-# ============================================================================
-# Batch Processing Endpoints
-# ============================================================================
 
-@app.route("/api/batch", methods=["POST"])
-@track_http_request
-def create_batch():
-    """Create a new batch processing job."""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data provided"}), 400
-
-        name = data.get("name", "").strip()
-        description = data.get("description", "").strip()
-        items = data.get("items", [])
-        priority = data.get("priority", "normal")
-        auto_retry_failed = data.get("auto_retry_failed", True)
-        max_retries = data.get("max_retries", 3)
-        concurrent_limit = data.get("concurrent_limit", 2)
-
-        # Validation
-        if not name:
-            return jsonify({"error": "Batch name is required"}), 400
-
-        if not items or not isinstance(items, list):
-            return jsonify({"error": "Batch items are required"}), 400
-
-        if len(items) > 50:  # Reasonable limit
-            return jsonify({"error": "Maximum 50 items per batch"}), 400
-
-        # Validate and convert priority
-        try:
-            # Handle both string and enum values
-            if isinstance(priority, str):
-                priority_map = {
-                    "low": JobPriority.LOW,
-                    "normal": JobPriority.NORMAL,
-                    "high": JobPriority.HIGH
-                }
-                priority_enum = priority_map.get(priority.lower())
-                if priority_enum is None:
-                    return jsonify({"error": f"Invalid priority: {priority}. Must be 'low', 'normal', or 'high'"}), 400
-            else:
-                priority_enum = JobPriority(priority)
-        except ValueError:
-            return jsonify({"error": f"Invalid priority: {priority}. Must be 'low', 'normal', or 'high'"}), 400
-
-        # Validate each item
-        for i, item in enumerate(items):
-            if not isinstance(item, dict):
-                return jsonify({"error": f"Item {i+1} must be an object"}), 400
-
-            if "effect_type" not in item:
-                return jsonify({"error": f"Item {i+1} missing effect_type"}), 400
-
-            if "parameters" not in item:
-                return jsonify({"error": f"Item {i+1} missing parameters"}), 400
-
-        # Create batch
-        batch_id = batch_processor.create_batch(
-            name=name,
-            description=description,
-            items=items,
-            priority=priority_enum,
-            auto_retry_failed=auto_retry_failed,
-            max_retries=max_retries,
-            concurrent_limit=concurrent_limit
-        )
-
-        logger.info("Batch created", batch_id=batch_id, name=name, items_count=len(items))
-
-        return jsonify({
-            "batch_id": batch_id,
-            "status": "created",
-            "total_items": len(items)
-        }), 201
-
-    except Exception as e:
-        logger.error("Failed to create batch", error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/batch/<batch_id>/start", methods=["POST"])
-@track_http_request
-def start_batch(batch_id: str):
-    """Start processing a batch."""
-    try:
-        success = batch_processor.start_batch(batch_id)
-        if success:
-            return jsonify({"status": "started"})
-        else:
-            return jsonify({"error": "Failed to start batch"}), 400
-    except Exception as e:
-        logger.error("Failed to start batch", batch_id=batch_id, error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/batch/<batch_id>/pause", methods=["POST"])
-@track_http_request
-def pause_batch(batch_id: str):
-    """Pause batch processing."""
-    try:
-        success = batch_processor.pause_batch(batch_id)
-        if success:
-            return jsonify({"status": "paused"})
-        else:
-            return jsonify({"error": "Failed to pause batch"}), 400
-    except Exception as e:
-        logger.error("Failed to pause batch", batch_id=batch_id, error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/batch/<batch_id>/resume", methods=["POST"])
-@track_http_request
-def resume_batch(batch_id: str):
-    """Resume paused batch processing."""
-    try:
-        success = batch_processor.resume_batch(batch_id)
-        if success:
-            return jsonify({"status": "resumed"})
-        else:
-            return jsonify({"error": "Failed to resume batch"}), 400
-    except Exception as e:
-        logger.error("Failed to resume batch", batch_id=batch_id, error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/batch/<batch_id>/cancel", methods=["POST"])
-@track_http_request
-def cancel_batch(batch_id: str):
-    """Cancel batch processing."""
-    try:
-        success = batch_processor.cancel_batch(batch_id)
-        if success:
-            return jsonify({"status": "cancelled"})
-        else:
-            return jsonify({"error": "Failed to cancel batch"}), 400
-    except Exception as e:
-        logger.error("Failed to cancel batch", batch_id=batch_id, error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/batch/<batch_id>", methods=["GET"])
-@track_http_request
-def get_batch_status(batch_id: str):
-    """Get batch status and progress."""
-    try:
-        batch_data = batch_processor.get_batch_status(batch_id)
-        if batch_data:
-            return jsonify(batch_data)
-        else:
-            return jsonify({"error": "Batch not found"}), 404
-    except Exception as e:
-        logger.error("Failed to get batch status", batch_id=batch_id, error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/batch", methods=["GET"])
-@track_http_request
-def list_batches():
-    """List all batches with optional status filter."""
-    try:
-        status_filter = request.args.get("status")
-        batches = batch_processor.list_batches(status_filter)
-        return jsonify({"batches": batches})
-    except Exception as e:
-        logger.error("Failed to list batches", error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/batch/<batch_id>", methods=["DELETE"])
-@track_http_request
-def delete_batch(batch_id: str):
-    """Delete a batch."""
-    try:
-        success = batch_processor.delete_batch(batch_id)
-        if success:
-            return jsonify({"status": "deleted"})
-        else:
-            return jsonify({"error": "Failed to delete batch or batch is still active"}), 400
-    except Exception as e:
-        logger.error("Failed to delete batch", batch_id=batch_id, error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
-
-
-# ============================================================================
-# WebSocket and Real-time Preview Endpoints
-# ============================================================================
-
-@app.route("/api/websocket/status", methods=["GET"])
-@track_http_request
-def get_websocket_status():
-    """Get WebSocket server status."""
-    try:
-        status = websocket_manager.get_status()
-        return jsonify(status)
-    except Exception as e:
-        logger.error("Failed to get WebSocket status", error=str(e))
-        return jsonify({"error": "Internal server error"}), 500
 
 
 
@@ -1085,17 +913,7 @@ if __name__ == "__main__":
     cleanup_thread.daemon = True
     cleanup_thread.start()
 
-    # Start WebSocket server for real-time features
-    websocket_started = start_websocket_server_thread(
-        host=config.API_HOST,
-        port=config.API_PORT + 1  # Use next port for WebSocket
-    )
 
-    if websocket_started:
-        logger.info("WebSocket server started for real-time features",
-                   ws_port=config.API_PORT + 1)
-    else:
-        logger.warning("WebSocket server not started - real-time features disabled")
 
     logger.info(
         "Starting Green-Code FX API server",
