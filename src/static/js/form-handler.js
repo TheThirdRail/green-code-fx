@@ -1277,7 +1277,7 @@ class Snake {
                     <div class="error-category mt-2">
                         <small class="text-help">
                             <i class="fas fa-tag me-1"></i>
-                            Error Type: <span class="badge bg-secondary">${categoryInfo.name}</span>
+                            Error Type: <span class="badge bg-success text-dark">${categoryInfo.name}</span>
                         </small>
                     </div>
                 `;
