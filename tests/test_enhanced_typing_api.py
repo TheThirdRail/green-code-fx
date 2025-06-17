@@ -85,6 +85,22 @@ class TestEnhancedTypingAPI:
         assert call_args.kwargs['font_size'] == 24
         assert call_args.kwargs['text_color'] == '#FF0000'
 
+    def test_typo_probability_parameter(self, client, mock_video_generator):
+        """Test typing effect generation with custom typo probability."""
+        payload = {
+            'duration': 30,
+            'typo_probability': 0.05,
+            'output_format': 'mp4'
+        }
+
+        response = client.post('/api/generate/typing',
+                             data=json.dumps(payload),
+                             content_type='application/json')
+
+        assert response.status_code == 202
+        call_args = mock_video_generator.generate_typing_effect.call_args
+        assert call_args.kwargs['typo_probability'] == 0.05
+
     def test_custom_text_parameter(self, client, mock_video_generator):
         """Test typing effect generation with custom text input."""
         custom_text = "print('Hello, World!')\nprint('Custom text test')"
