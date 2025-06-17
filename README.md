@@ -143,7 +143,6 @@ Response:
 | `custom_text` | string | Custom text content | null | Max 50,000 characters |
 | `text_file` | file | Text file upload (.txt only) | null | Max 10MB |
 | `output_format` | string | Output video format | "mp4" | "mp4" |
-| `typo_probability` | float | Chance of a typo per character | 0.02 | 0-0.2 |
 
 **Note**: Use either `custom_text` OR `text_file`, not both.
 

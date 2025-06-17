@@ -53,8 +53,8 @@ active_jobs: Dict[str, Dict[str, Any]] = {}
 job_lock = threading.Lock()
 
 
-def _create_base_app() -> Flask:
-    """Create and configure the base Flask application."""
+def create_app() -> Flask:
+    """Create and configure the Flask application."""
     # Configure Flask with template and static directories
     app = Flask(__name__,
                 template_folder='templates',
@@ -76,12 +76,7 @@ def _create_base_app() -> Flask:
     return app
 
 
-app = _create_base_app()
-
-
-def create_app() -> Flask:
-    """Return a configured Flask application with all routes."""
-    return app
+app = create_app()
 
 
 # ============================================================================
@@ -349,10 +344,6 @@ def generate_typing_effect():
         typing_speed = data.get("typing_speed", config.TYPING_WPM)  # WPM
         custom_text = data.get("custom_text", None)
 
-        # Typo simulation parameters
-        typo_probability = data.get("typo_probability", config.TYPING_TYPO_PROBABILITY)
-        error_delay = data.get("error_delay", config.TYPING_ERROR_DELAY_SECONDS)
-
         # New video settings parameters
         fps = data.get("fps", config.TARGET_FPS)
         resolution = data.get("resolution", "4k")
@@ -375,22 +366,6 @@ def generate_typing_effect():
             return jsonify({
                 "error": "Typing speed must be between 10 and 300 WPM"
             }), 400
-
-        # Validate typo probability
-        try:
-            typo_probability = float(typo_probability)
-        except (ValueError, TypeError):
-            return jsonify({"error": "Typo probability must be a number"}), 400
-        if typo_probability < 0 or typo_probability > 0.2:
-            return jsonify({"error": "Typo probability must be between 0 and 0.2"}), 400
-
-        # Validate error delay
-        try:
-            error_delay = float(error_delay)
-        except (ValueError, TypeError):
-            return jsonify({"error": "Error delay must be a number"}), 400
-        if error_delay < 0 or error_delay > 5:
-            return jsonify({"error": "Error delay must be between 0 and 5 seconds"}), 400
 
         # Validate FPS
         try:
@@ -464,9 +439,7 @@ def generate_typing_effect():
             "typing_speed": typing_speed,
             "custom_text": custom_text,
             "fps": fps,
-            "resolution": resolution,
-            "typo_probability": typo_probability,
-            "error_delay": error_delay
+            "resolution": resolution
         }
 
         try:
@@ -500,9 +473,7 @@ def generate_typing_effect():
                 "custom_text": custom_text,
                 "uploaded_file_path": uploaded_file_path,
                 "fps": fps,
-                "resolution": resolution,
-                "typo_probability": typo_probability,
-                "error_delay": error_delay
+                "resolution": resolution
             },
             "estimated_duration": estimated_duration,
             "estimation_confidence": confidence_level,
@@ -529,8 +500,6 @@ def generate_typing_effect():
                     uploaded_file_path=uploaded_file_path,
                     fps=fps,
                     resolution=resolution,
-                    typo_probability=typo_probability,
-                    error_delay=error_delay,
                     progress_callback=lambda p: update_job_progress(job_id, p)
                 )
             except Exception as e:
