@@ -48,11 +48,6 @@ const FormManager = {
             typingSpeedInput.addEventListener('blur', this.validateTypingSpeedField.bind(this));
         }
 
-        const typoFrequencyInput = document.getElementById('typoFrequency');
-        if (typoFrequencyInput) {
-            typoFrequencyInput.addEventListener('input', this.validateTypoFrequencyField.bind(this));
-            typoFrequencyInput.addEventListener('blur', this.validateTypoFrequencyField.bind(this));
-        }
         // Character counter for custom text
         const customTextArea = document.getElementById('customText');
         if (customTextArea) {
@@ -121,7 +116,7 @@ const FormManager = {
 
     setupSettingsAutoSave() {
         // Auto-save settings when form values change
-        const formElements = ['fontFamily', 'fontSize', 'textColor', 'typingSpeed', 'typoFrequency', 'duration', 'outputFormat', 'fps', 'resolution'];
+        const formElements = ['fontFamily', 'fontSize', 'textColor', 'typingSpeed', 'duration', 'outputFormat', 'fps', 'resolution'];
 
         formElements.forEach(elementId => {
             const element = document.getElementById(elementId);
@@ -141,7 +136,6 @@ const FormManager = {
             fontSize: document.getElementById('fontSize')?.value,
             textColor: document.getElementById('textColor')?.value,
             typingSpeed: document.getElementById('typingSpeed')?.value,
-            typoFrequency: document.getElementById('typoFrequency')?.value,
             duration: document.getElementById('duration')?.value,
             outputFormat: document.getElementById('outputFormat')?.value,
             fps: document.getElementById('fps')?.value,
@@ -754,12 +748,6 @@ class Snake {
             errors.push('Typing speed must be between 10 and 300 WPM');
         }
 
-        // Validate typo frequency
-        const typoFreq = parseFloat(data.typo_frequency);
-        if (isNaN(typoFreq) || typoFreq < 0 || typoFreq > 20) {
-            errors.push('Typo frequency must be between 0 and 20 percent');
-        }
-
         // Validate color
         if (!GreenCodeFX.Utils.isValidHexColor(data.text_color)) {
             errors.push('Please enter a valid hex color code (e.g., #00FF00)');
@@ -887,14 +875,6 @@ class Snake {
         this.setFieldValidation(input, isValid, isValid ? '' : 'Typing speed must be between 10 and 300 WPM');
     },
 
-    validateTypoFrequencyField(event) {
-        const input = event.target;
-        const value = parseFloat(input.value);
-        const isValid = !isNaN(value) && value >= 0 && value <= 20;
-
-        this.setFieldValidation(input, isValid, isValid ? '' : 'Typo frequency must be between 0 and 20 percent');
-    },
-
     validateColorField(event) {
         const input = event.target;
         const isValid = GreenCodeFX.Utils.isValidHexColor(input.value);
@@ -953,7 +933,6 @@ class Snake {
         submitData.append('font_size', formData.font_size);
         submitData.append('text_color', formData.text_color);
         submitData.append('typing_speed', formData.typing_speed);
-        submitData.append('typo_probability', parseFloat(formData.typo_frequency) / 100);
         submitData.append('output_format', formData.output_format || 'mp4');
         submitData.append('fps', formData.fps || '60');
         submitData.append('resolution', formData.resolution || '4k');
